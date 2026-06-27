@@ -1,0 +1,78 @@
+{
+  "defaultMode": "default",
+  "permissions": {
+    "allow": [
+      "Bash(mvn test *)",
+      "Bash(mvn -q -DskipTests compile *)",
+      "Bash(mvn -DskipTests package *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Skill(implement-from-openspec *)",
+      "Skill(review-openspec-change *)",
+      "Skill(prepare-review *)"
+    ],
+    "ask": [
+      "Bash(*)",
+      "Edit(*)",
+      "Write(*)"
+    ],
+    "deny": [
+      "Bash(git push *)",
+      "Bash(kubectl *)",
+      "Bash(terraform *)",
+      "Bash(helm *)",
+      "Bash(rm -rf *)",
+      "Read(secrets/**)",
+      "Edit(secrets/**)",
+      "Write(secrets/**)",
+      "Edit(infra/**)",
+      "Write(infra/**)",
+      "Edit(deploy/**)",
+      "Write(deploy/**)",
+      "Edit(src/main/resources/application*)",
+      "Write(src/main/resources/application*)",
+      "Edit(src/main/resources/bootstrap*)",
+      "Write(src/main/resources/bootstrap*)",
+      "Edit(src/main/resources/db/**)",
+      "Write(src/main/resources/db/**)",
+      "Edit(sql/**)",
+      "Write(sql/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/guard_write.py",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/ensure_change_context.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/run_checks.sh",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
+  }
+}
