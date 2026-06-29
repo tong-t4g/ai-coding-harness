@@ -1,7 +1,6 @@
 ---
 name: spring-architecture-review
 description: 检查 Spring Boot 分层、依赖方向和业务逻辑放置是否合理
-disable-model-invocation: true
 ---
 # Spring 架构审查
 ## 输入

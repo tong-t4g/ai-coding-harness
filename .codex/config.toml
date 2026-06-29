@@ -6,7 +6,7 @@ allow_login_shell = false
 ":minimal" = "read"
 
 [permissions.project-default.filesystem.":workspace_roots"]
-"." = "read"
+"." = "write"
 "secrets" = "deny"
 
 # 这些路径在 Claude 配置里是禁止 Edit/Write。

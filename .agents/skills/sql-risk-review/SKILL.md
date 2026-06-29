@@ -1,7 +1,6 @@
 ---
 name: sql-risk-review
 description: 检查 SQL、Mapper、批量更新、分页和索引相关风险
-disable-model-invocation: true
 ---
 # SQL 风险审查
 ## 输入

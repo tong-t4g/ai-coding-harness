@@ -1,7 +1,6 @@
 ---
 name: prepare-review
 description: 在 review 或提 PR 前，整理一份 Spring Boot 变更摘要
-disable-model-invocation: true
 ---
 # 生成评审摘要
 ## 输入
