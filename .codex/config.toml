@@ -1,0 +1,20 @@
+approval_policy = "on-request"
+default_permissions = "project-default"
+allow_login_shell = false
+
+[permissions.project-default.filesystem]
+":minimal" = "read"
+
+[permissions.project-default.filesystem.":workspace_roots"]
+"." = "read"
+"secrets" = "deny"
+
+# 这些路径在 Claude 配置里是禁止 Edit/Write。
+# 这里保持 read-only；普通编辑会触发审批，不会默认写入。
+"infra" = "read"
+"deploy" = "read"
+"src/main/resources/db" = "read"
+"sql" = "read"
+
+[permissions.project-default.network]
+enabled = false

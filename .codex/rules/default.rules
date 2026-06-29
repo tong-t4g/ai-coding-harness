@@ -1,0 +1,73 @@
+# deny Bash(...)
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "forbidden",
+    justification = "禁止从 Codex 推送代码；请由开发者手动执行。",
+)
+
+prefix_rule(
+    pattern = ["kubectl"],
+    decision = "forbidden",
+    justification = "禁止 Codex 操作 Kubernetes。",
+)
+
+prefix_rule(
+    pattern = ["terraform"],
+    decision = "forbidden",
+    justification = "禁止 Codex 操作 Terraform。",
+)
+
+prefix_rule(
+    pattern = ["helm"],
+    decision = "forbidden",
+    justification = "禁止 Codex 操作 Helm。",
+)
+
+prefix_rule(
+    pattern = ["rm", "-rf"],
+    decision = "forbidden",
+    justification = "禁止 Codex 执行 rm -rf。",
+)
+
+# allow Bash(...)
+prefix_rule(
+    pattern = ["mvn", "test"],
+    decision = "allow",
+    justification = "允许运行 Maven 测试。",
+)
+
+prefix_rule(
+    pattern = ["mvn", "-q", "-DskipTests", "compile"],
+    decision = "allow",
+    justification = "允许跳过测试进行 Maven 编译。",
+)
+
+prefix_rule(
+    pattern = ["mvn", "-DskipTests", "package"],
+    decision = "allow",
+    justification = "允许跳过测试进行 Maven 打包。",
+)
+
+prefix_rule(
+    pattern = ["git", "status"],
+    decision = "allow",
+    justification = "允许查看 Git 状态。",
+)
+
+prefix_rule(
+    pattern = ["git", "diff"],
+    decision = "allow",
+    justification = "允许查看 Git diff。",
+)
+
+prefix_rule(
+    pattern = ["java", "-version"],
+    decision = "allow",
+    justification = "允许查看 java version。",
+)
+
+prefix_rule(
+    pattern = ["mvn", "-version"],
+    decision = "allow",
+    justification = "允许查看 maven version。",
+)
