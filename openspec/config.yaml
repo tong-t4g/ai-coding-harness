@@ -1,0 +1,15 @@
+schema: spec-driven
+
+context: |
+    历史隐性约定：
+    - 某些前后端行为依赖 docs/architecture/implicit-contracts.md
+    - 修改状态字段、接口返回结构、默认值语义时，必须先检查该文件
+    - 如果需求触及这些约定，design.md 必须明确影响范围和兼容策略
+rules:
+    design:
+        - 若涉及历史隐性约定，必须写清楚兼容处理方式
+    tasks:
+        - 若涉及历史隐性约定，必须包含验证步骤
+Languages: |
+    Generate all artifacts in Simplified Chinese.
+    Use English for code-related terms.

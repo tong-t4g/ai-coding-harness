@@ -31,7 +31,5 @@ for pattern in blocked_patterns:
 print(json.dumps({
     "hookSpecificOutput": {
         "hookEventName": "PreToolUse",
-        "permissionDecision": "allow",
-        "permissionDecisionReason": "允许修改该路径",
     }
 }))
