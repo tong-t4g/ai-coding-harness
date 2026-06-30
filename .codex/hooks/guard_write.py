@@ -22,8 +22,8 @@ for pattern in blocked_patterns:
         print(json.dumps({
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": f"禁止修改受保护路径: {pattern}",
+                "permissionDecision": "ask",
+                "permissionDecisionReason": f"欲修改受保护路径: {pattern},是否允许",
             }
         }))
         sys.exit(0)
