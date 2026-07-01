@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "Edit|Write|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/openspec_write_gate.py\"",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"py -3 -X utf8 ((git rev-parse --show-toplevel) + '/.codex/hooks/openspec_write_gate.py')\"",
+            "timeout": 10,
+            "statusMessage": "Checking OpenSpec proposal"
+          }
+        ]
+      }
+    ]
+  }
+}
