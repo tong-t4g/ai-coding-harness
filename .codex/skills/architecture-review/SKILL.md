@@ -1,8 +1,8 @@
 ---
-name: spring-architecture-review
-description: 检查 Spring Boot 分层、依赖方向和业务逻辑放置是否合理
+name: architecture-review
+description: 检查职责分层、依赖方向和业务逻辑放置是否合理
 ---
-# Spring 架构审查
+# 架构审查
 ## 输入
 `$ARGUMENTS` = 本次改动涉及的文件、目录或 change id
 ## 检查项

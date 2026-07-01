@@ -49,6 +49,12 @@ prefix_rule(
 )
 
 prefix_rule(
+    pattern = ["mvn", "-version"],
+    decision = "allow",
+    justification = "允许查看 maven version。",
+)
+
+prefix_rule(
     pattern = ["git", "status"],
     decision = "allow",
     justification = "允许查看 Git 状态。",
@@ -66,8 +72,3 @@ prefix_rule(
     justification = "允许查看 java version。",
 )
 
-prefix_rule(
-    pattern = ["mvn", "-version"],
-    decision = "allow",
-    justification = "允许查看 maven version。",
-)

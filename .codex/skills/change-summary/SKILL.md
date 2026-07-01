@@ -1,8 +1,8 @@
 ---
-name: prepare-review
-description: 在 review 或提 PR 前，整理一份 Spring Boot 变更摘要
+name: change-summary
+description: 在 review 或提 PR 前，整理一份变更摘要
 ---
-# 生成评审摘要
+# 生成变更摘要
 ## 输入
 `$ARGUMENTS` = OpenSpec 的 change id
 ## 必读文件
