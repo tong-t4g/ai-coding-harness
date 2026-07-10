@@ -52,10 +52,11 @@ LOW -- 适用于明确的、少量的修改。是使用一个 skill 调用 propo
 
 
 
-Grill-me（matt-pocock-skills） 可以对需求/任务进行思考和提问，这个很有用，这种方式是不是能替代对需求的评审？   https://mp.weixin.qq.com/s/hyY3ZGuzr4YFEwQi0YrCXA
+Grill-me（matt-pocock-skills） 可以对需求/任务进行思考和提问，这个很有用，这种方式是不是能替代对需求的评审？   https://mp.weixin.qq.com/s/hyY3ZGuzr4YFEwQi0YrCXA  https://github.com/devcxl/mattpocock-skills-zh
 Trellis 应该是集大成者，吸收了superpower openspec 的能力和设计，但又更简单，轻量  https://github.com/mindfold-ai/Trellis/blob/main/README_CN.md
 spec-superflow 直接就是融合了 superpower openspec 的代码   https://github.com/MageByte-Zero/spec-superflow
 HyperSpec 协调 OpenSpec（规格管理）和 Superpowers,一个很简单的工程。  https://github.com/wind7rui/HyperSpec
+https://github.com/devcxl/superpowers-zh
 
 加一个让 AI 把值得更新到 docs 中的知识更新到合适位置（主要是一些架构约束、隐含业务约束）的 skill 或  subagent 。在更高层的流程调用中调用。
 
