@@ -1,0 +1,5 @@
+interface:
+  display_name: "l-process"
+  short_description: "基于用户的需求描述实现并交付开发工作（轻量流程）"
+policy:
+  allow_implicit_invocation: false

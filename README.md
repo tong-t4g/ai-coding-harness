@@ -27,17 +27,19 @@ dispatcher  intent-classifier 三角色出需求分析(业务、开发、测试)
 完整流程：
 probe(对需求进行提问)  propose  proposalreview(对proposal、spec进行评审、对抗性评审（考虑三角色）)  需求确认（人工环节） apply  codereview(独立于后一个步骤的代码审查) verify  部署测试环境（这一步始终由人工调用） archive
 
+流程类型和状态管理：
+用户可以根据需求复杂度，选择使用不同的 skill,不同的 skill 有不同的流程：
+HIGH -- 
+MEDIUM -- 
+LOW -- 适用于明确的、少量的修改，这种修改一般比较细节，不影响业务逻辑，不需要 proposal、specs，也无需追溯。只需 implement、tdd、codereview
+
 specs 文档的作用：
 proposal.md — 需求方案/动机文档
 specs.md -- 功能描述/规范
 design.md -- 技术实现方案/设计文档
 tasks.md -- 实现清单/任务列表
 
-流程类型和状态管理：
-用户可以根据需求复杂度，选择使用不同的 skill,不同的 skill 有不同的流程：
-HIGH -- 
-MEDIUM -- 
-LOW -- 适用于明确的、少量的修改。是使用一个 skill 调用 propose apply archive ,还是单独提供一个 开发 → 编译 → 单测 skill
+
 
 是否需要一个单独的 workflow.yaml 来定义流程？
 
