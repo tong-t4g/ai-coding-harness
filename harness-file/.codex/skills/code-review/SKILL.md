@@ -1,6 +1,7 @@
 ---
 name: code-review
 description: 审查从固定基准点（提交、分支、标签或 merge-base）到当前 HEAD 的代码变更，同时检查规范符合性（Standards）和需求符合性（Spec）。并行运行两个相互隔离的子智能体，并列报告结果。用于审查分支、PR、进行中的变更，或用户要求“审查自 X 以来的变更”。
+disable-model-invocation: false
 ---
 
 审查用户指定的固定基准点与当前 `HEAD` 之间的差异：

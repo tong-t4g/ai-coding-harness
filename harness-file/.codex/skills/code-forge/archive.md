@@ -1,4 +1,4 @@
-# HyperSpec:archive — 收尾阶段
+# CodeForge:archive — 收尾阶段
 
 ## 目标
 
@@ -8,18 +8,18 @@
 
 确认 apply 阶段已完成：
 
-- `superpowers/plans/` 下的计划文件所有步骤已勾选
+- `openspec/plans/` 下的计划文件所有步骤已勾选
 - 测试全部通过（或 test_command 为 null）
 - 代码审查无 Critical 问题
-- `.hyperspec-state.yaml` 的 checkpoint 为 `apply-done`、`consistency-verified`、`archived` 或 `done` 之一
+- `.codeforge-state.yaml` 的 checkpoint 为 `apply-done`、`consistency-verified`、`archived` 或 `done` 之一
 
-如果前置条件不满足，提示：「apply 阶段尚未完成，请先运行 /hyperspec」
+如果前置条件不满足，提示：「apply 阶段尚未完成，请先运行 /code-forge」
 
 ## 阶段流程
 
 ### 1. 规格一致性验证
 
-逐项检查代码实现是否和规格文档一致。这是 HyperSpec 特有的验证环节，确保实现没有偏离设计。
+逐项检查代码实现是否和规格文档一致。这是 CodeForge 特有的验证环节，确保实现没有偏离设计。
 
 **做法：**
 - 读取 `openspec/changes/<变更名>/design.md`，逐一确认其中定义的技术方案是否在代码中体现
@@ -45,7 +45,7 @@
 
 **持久化验证状态**：验证完成后，在 `openspec/changes/<变更名>/` 下创建 `.close-verification-done` 文件（内容为验证结果清单），用于断点恢复时判断是否需要重跑验证。
 
-完成后更新 `.hyperspec-state.yaml`：`checkpoint: consistency-verified`。
+完成后更新 `.codeforge-state.yaml`：`checkpoint: consistency-verified`。
 
 ### 2. 处理不一致
 
@@ -54,7 +54,7 @@
 **选项 A：改代码**
 - 标记哪些代码需要修改
 - 询问用户是否在本阶段直接修复（简单修复）或回到 apply 阶段（复杂修复）
-- 如果用户选择回到 apply 阶段：更新 `.hyperspec-state.yaml` 为 `phase: apply, checkpoint: reviewed`，然后结束 archive 阶段
+- 如果用户选择回到 apply 阶段：更新 `.codeforge-state.yaml` 为 `phase: apply, checkpoint: reviewed`，然后结束 archive 阶段
 
 **选项 B：改规格**
 - 标记哪些规格文档需要更新
@@ -63,7 +63,7 @@
 
 **无论选择哪种修复方式，修复完成后必须：**
 1. 删除 `.close-verification-done` 文件（使验证状态失效）
-2. 更新 `.hyperspec-state.yaml`：`checkpoint: apply-done`（回退到验证前）
+2. 更新 `.codeforge-state.yaml`：`checkpoint: apply-done`（回退到验证前）
 3. 重新执行 Step 1 验证
 4. 重新生成 `.close-verification-done`
 
@@ -85,7 +85,7 @@
    - 展示归档摘要
 4. 等待 skill 完成后，确认归档成功：检查 `openspec/changes/archive/` 下是否有对应目录，且原活跃变更目录已移除
 
-**注意：** `openspec-archive-change` 内部已包含用户确认环节（它用 AskUserQuestion 确认是否继续），不需要 HyperSpec 重复确认。但 Step 1 的验证结果应在调用 archive 前展示给用户。
+**注意：** `openspec-archive-change` 内部已包含用户确认环节（它用 AskUserQuestion 确认是否继续），不需要 CodeForge 重复确认。但 Step 1 的验证结果应在调用 archive 前展示给用户。
 
 **降级方案：** 如果 `openspec-archive-change` skill 不可用（Skill 工具返回 "Unknown skill"），**或 `openspec archive` CLI 卡在交互式确认（Y/n）、或因 spec 未用 `## ADDED/MODIFIED Requirements` delta 头被判"无 delta"无法自动合并规格**，手动执行归档操作：
 1. 确认 `openspec/changes/<变更名>/tasks.md` 中所有任务已标记为完成
@@ -95,7 +95,7 @@
 
 > **注**：openspec 1.3.1 的 `archive` 是交互式的，并要求 spec 用 `## ADDED/MODIFIED/REMOVED Requirements` delta 头（而非 `### Requirement:`）；不符会提示"无 delta"（非阻塞警告）。若规格未自动合并到 `openspec/specs/`，归档仍可经手动 `mv` 完成（知识图谱仅依赖归档目录的文件，不依赖 specs 合并）。
 
-完成后更新 `.hyperspec-state.yaml`：`checkpoint: archived`。
+完成后更新 `.codeforge-state.yaml`：`checkpoint: archived`。
 
 **归档后知识更新（如果 `project_profile.knowledge_graph.graphify_available == true`）：**
 归档完成、变更已移入 `archive/` 后，触发 Graphify 增量更新，把本次变更沉淀到文档知识图谱，供后续变更语义检索复用：
@@ -127,7 +127,7 @@
 - 归档位置
 
 **清理状态文件：**
-更新 `.hyperspec-state.yaml`：`checkpoint: done`。使用 `git rm .hyperspec-state.yaml` 将其从 git 追踪中移除，然后 commit（message: `chore: hyperspec <变更名> 完成`）。确保工作区干净。
+更新 `.codeforge-state.yaml`：`checkpoint: done`。使用 `git rm .codeforge-state.yaml` 将其从 git 追踪中移除，然后 commit（message: `chore: codeforge <变更名> 完成`）。确保工作区干净。
 
 ## 出口条件
 
@@ -135,7 +135,7 @@
 - 变更已归档（由 openspec-archive-change 完成）
 - 如使用了 worktree：用户已选择分支处理方式且 worktree 已处理
 - 如未使用 worktree：代码已提交或用户已确认稍后处理
-- `.hyperspec-state.yaml` 已删除
+- `.codeforge-state.yaml` 已删除
 
 ## 断点恢复
 
@@ -143,7 +143,7 @@ archive 阶段可能通过两种方式进入：
 1. apply 阶段完成后自动进入（正常路径）
 2. 用户显式指定「归档收尾」进入（用户意图覆盖）
 
-重新运行时，读取 `.hyperspec-state.yaml` 的 checkpoint 并验证：
+重新运行时，读取 `.codeforge-state.yaml` 的 checkpoint 并验证：
 
 | checkpoint | 实际状态验证 | 恢复到 |
 |-----------|-------------|--------|
@@ -157,7 +157,7 @@ archive 阶段可能通过两种方式进入：
 
 **异常状态检测：**
 - 活跃变更目录已删除但 archive 目录不存在 → 归档过程中断，提示用户可尝试 `openspec list --json` 检查状态
-- `.hyperspec-state.yaml` 存在但活跃变更目录不存在且未归档 → 可能是手动删除，提示用户确认状态
+- `.codeforge-state.yaml` 存在但活跃变更目录不存在且未归档 → 可能是手动删除，提示用户确认状态
 
 ## 硬门
 

@@ -25,7 +25,7 @@ CodeForge **不做**：
 - 不手动转 tasks → plan（由 `plans` 负责）
 - 不手动执行归档操作（由 `openspec-archive-change` 负责）
 - 不重申 TDD 规则（由 `subagent-implement` 负责）
-- 不重申审查规则（由 `superpowers:requesting-code-review` 负责）
+- 不重申审查规则（由 `code-review` 负责）
 
 ### 各阶段委托的原生 Skill
 
@@ -35,7 +35,7 @@ CodeForge **不做**：
 | propose | `plans` | 读取 openspec artifacts，生成实施计划 |
 | apply | `subagent-implement` 或 inline | 按计划执行实现，TDD + 子代理审查          |
 | apply | `verify` | 全量验证                         |
-| apply | `superpowers:requesting-code-review` | 全局代码审查                       |
+| apply | `code-review` | 全局代码审查                       |
 | archive | `openspec-archive-change` | 通过 CLI 归档变更（含 spec sync）     |
 
 ## 前置检查
