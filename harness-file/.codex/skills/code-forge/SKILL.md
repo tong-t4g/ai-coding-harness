@@ -1,7 +1,7 @@
 ---
 name: code-forge
 description: 是一套规格驱动 + 工程纪律的完整开发工作流程。它会协调 OpenSpec（规格管理）和多个研发 skills，走完从需求、实现到归档的研发全流程。当用户说「用 code-forge」「规格驱动开发」「完整流程开发功能」时触发。
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # CodeForge
@@ -34,7 +34,7 @@ CodeForge **不做**：
 | propose | `openspec-propose` | 通过 CLI 创建变更目录 + 生成所有 artifacts（proposal、design、specs、tasks） |
 | propose | `plans` | 读取 openspec artifacts，生成实施计划 |
 | apply | `subagent-implement` 或 inline | 按计划执行实现，TDD + 子代理审查          |
-| apply | `superpowers:verification-before-completion` | 全量验证                         |
+| apply | `verify` | 全量验证                         |
 | apply | `superpowers:requesting-code-review` | 全局代码审查                       |
 | archive | `openspec-archive-change` | 通过 CLI 归档变更（含 spec sync）     |
 

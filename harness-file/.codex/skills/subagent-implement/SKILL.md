@@ -1,6 +1,7 @@
 ---
 name: subagent-implement
 description: 顺序执行已批准的多任务实现计划，为每项可独立验证的任务分派隔离的实现子智能体，逐任务完成规格与质量审查，并在结束时审查整个分支。
+disable-model-invocation: true
 ---
 
 # 子智能体驱动开发
