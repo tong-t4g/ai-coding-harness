@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# 从实现计划中提取单项任务。
+# 标准输出仅返回简报绝对路径，诊断信息写入标准错误。
+#
+# 用法：task-brief PLAN_FILE TASK_NUMBER [OUTFILE]
+set -euo pipefail
+
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  echo "用法：task-brief PLAN_FILE TASK_NUMBER [OUTFILE]" >&2
+  exit 2
+fi
+
+plan=$1
+n=$2
+
+if [ ! -f "$plan" ]; then
+  echo "错误：计划文件不存在：$plan" >&2
+  exit 2
+fi
+
+case "$n" in
+  ''|*[!0-9]*)
+    echo "错误：任务编号必须是正整数：$n" >&2
+    exit 2
+    ;;
+esac
+
+if [ "$n" -eq 0 ]; then
+  echo "错误：任务编号必须大于 0" >&2
+  exit 2
+fi
+
+if [ "$#" -eq 3 ]; then
+  out=$3
+  mkdir -p "$(dirname "$out")"
+else
+  dir=$(bash "$(cd "$(dirname "$0")" && pwd)/sdd-workspace" "$plan")
+  out="$dir/task-${n}-brief.md"
+fi
+
+tmp="${out}.tmp.$$"
+trap 'rm -f "$tmp"' EXIT
+
+awk -v n="$n" '
+  /^[[:space:]]*(```|~~~)/ { infence = !infence }
+  !infence && /^#+[ \t]+(Task|任务)[ \t]+[0-9]+/ {
+    intask = ($0 ~ ("^#+[ \t]+(Task|任务)[ \t]+" n "([^0-9]|$)"))
+  }
+  intask { print }
+' "$plan" > "$tmp"
+
+if [ ! -s "$tmp" ]; then
+  echo "错误：在 $plan 中找不到标题为 Task $n 或任务 $n 的任务" >&2
+  exit 3
+fi
+
+mv "$tmp" "$out"
+trap - EXIT
+out_dir=$(cd "$(dirname "$out")" && pwd -P)
+out_abs="$out_dir/$(basename "$out")"
+echo "已写入任务简报：$out_abs（$(wc -l < "$out" | tr -d ' ') 行）" >&2
+printf '%s\n' "$out_abs"

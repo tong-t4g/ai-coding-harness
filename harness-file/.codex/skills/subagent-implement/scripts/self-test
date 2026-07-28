@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# 在临时 Git 仓库中验证 subagent-implement 的确定性脚本。
+set -euo pipefail
+
+script_dir=$(cd "$(dirname "$0")" && pwd -P)
+tmp_base=${TMPDIR:-/tmp}
+tmp=$(mktemp -d)
+
+cleanup() {
+  case "$tmp" in
+    "$tmp_base"/*) rm -rf -- "$tmp" ;;
+    *) echo "错误：拒绝清理未验证的临时目录：$tmp" >&2 ;;
+  esac
+}
+trap cleanup EXIT
+
+repo="$tmp/repo"
+git init -q "$repo"
+git -C "$repo" config user.name "SDD Self Test"
+git -C "$repo" config user.email "sdd-self-test@example.invalid"
+git -C "$repo" config core.autocrlf false
+
+mkdir -p "$repo/a" "$repo/b"
+cat > "$repo/a/plan.md" <<'PLAN'
+# 示例计划
+
+### 任务 1：第一项
+
+第一项内容。
+
+```text
+### 任务 2：代码块中的伪标题
+```
+
+### 任务 2：第二项
+
+第二项内容。
+PLAN
+cat > "$repo/b/plan.md" <<'PLAN'
+# Compatibility Plan
+
+### Task 1: English heading
+
+Compatibility content.
+PLAN
+
+git -C "$repo" add a/plan.md b/plan.md
+git -C "$repo" commit -q -m "添加计划"
+base=$(git -C "$repo" rev-parse HEAD)
+
+printf '实现内容\n' > "$repo/result.txt"
+git -C "$repo" add result.txt
+git -C "$repo" commit -q -m "添加实现"
+head=$(git -C "$repo" rev-parse HEAD)
+
+cd "$repo"
+workspace_a=$(bash "$script_dir/sdd-workspace" "$repo/a/plan.md")
+workspace_b=$(bash "$script_dir/sdd-workspace" "$repo/b/plan.md")
+if [ "$workspace_a" = "$workspace_b" ]; then
+  echo "错误：同名计划映射到了同一工作区" >&2
+  exit 1
+fi
+
+brief=$(bash "$script_dir/task-brief" "$repo/a/plan.md" 2)
+grep -q '^### 任务 2：第二项$' "$brief"
+if grep -q '第一项内容' "$brief"; then
+  echo "错误：任务简报包含前一任务内容" >&2
+  exit 1
+fi
+
+english_brief=$(bash "$script_dir/task-brief" "$repo/b/plan.md" 1)
+grep -q '^### Task 1: English heading$' "$english_brief"
+
+if bash "$script_dir/task-brief" "$repo/a/plan.md" 99 >/dev/null 2>/dev/null; then
+  echo "错误：缺失任务未显式失败" >&2
+  exit 1
+else
+  status=$?
+  if [ "$status" -ne 3 ]; then
+    echo "错误：缺失任务退出码应为 3，实际为 $status" >&2
+    exit 1
+  fi
+fi
+
+package=$(bash "$script_dir/review-package" "$repo/a/plan.md" "$base" "$head")
+grep -q '^## 提交$' "$package"
+grep -q '^## 文件变更$' "$package"
+grep -q '^## Diff$' "$package"
+
+if bash "$script_dir/review-package" "$repo/a/plan.md" "$head" "$head" >/dev/null 2>/dev/null; then
+  echo "错误：空提交范围未显式失败" >&2
+  exit 1
+else
+  status=$?
+  if [ "$status" -ne 3 ]; then
+    echo "错误：空提交范围退出码应为 3，实际为 $status" >&2
+    exit 1
+  fi
+fi
+
+echo "自检通过：工作区隔离、中英文任务提取、失败退出和审查包生成均符合预期"

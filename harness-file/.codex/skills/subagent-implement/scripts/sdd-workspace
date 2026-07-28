@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# 为一个计划解析并创建独立的 SDD 工作区。
+# 标准输出仅返回工作区绝对路径，诊断信息写入标准错误。
+#
+# 用法：sdd-workspace PLAN_FILE
+set -euo pipefail
+
+if [ "$#" -ne 1 ]; then
+  echo "用法：sdd-workspace PLAN_FILE" >&2
+  exit 2
+fi
+
+plan=$1
+if [ ! -f "$plan" ]; then
+  echo "错误：计划文件不存在：$plan" >&2
+  exit 2
+fi
+
+plan_dir=$(cd "$(dirname "$plan")" && pwd -P)
+plan_abs="$plan_dir/$(basename "$plan")"
+root=$(git rev-parse --show-toplevel)
+root=$(cd "$root" && pwd -P)
+
+case "$plan_abs" in
+  "$root"/*) ;;
+  *)
+    echo "错误：计划文件必须位于当前 Git 工作区内：$plan_abs" >&2
+    exit 2
+    ;;
+esac
+
+name=$(basename "$plan")
+slug=$(printf '%s' "${name%.md}" | sed 's/[^[:alnum:]._-]/-/g; s/--*/-/g; s/^-//; s/-$//')
+if [ -z "$slug" ]; then
+  slug=plan
+fi
+
+key=$(printf '%s' "$plan_abs" | git hash-object --stdin | cut -c1-10)
+base="$root/.superpowers/sdd"
+dir="$base/${slug}-${key}"
+
+mkdir -p "$dir"
+ignore="$base/.gitignore"
+if [ ! -f "$ignore" ]; then
+  printf '*\n' > "$ignore"
+elif ! grep -qxF '*' "$ignore"; then
+  printf '*\n' >> "$ignore"
+fi
+
+cd "$dir"
+pwd -P

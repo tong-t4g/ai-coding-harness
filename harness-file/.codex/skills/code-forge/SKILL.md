@@ -38,17 +38,15 @@ CodeForge **不做**：
 | apply | `superpowers:requesting-code-review` | 全局代码审查                       |
 | archive | `openspec-archive-change` | 通过 CLI 归档变更（含 spec sync）     |
 
-## 前提检查
+## 前置检查
 
-触发后先检查两项：
+触发后先检查：
 
-**检查1：Superpowers** — 看 brainstorming 等 skill 是否可用。不可用则提示：`/plugin install superpowers@claude-plugins-official`
-
-**检查2：OpenSpec** — 看项目根目录是否有 `openspec/`。没有则提示：`npx @fission-ai/openspec init`
+**检查：OpenSpec** — 看项目根目录是否有 `openspec/`。没有则提示：`npx @fission-ai/openspec init`
 
 注意：`openspec init` 除了创建 `openspec/` 目录外，还会在 `.claude/` 下生成配置文件和 slash commands。这些都是正常的副作用，不需要特别处理。
 
-两项都通过后才继续。
+检查通过后才可继续。
 
 ## 项目分析器（Project Profiler）
 

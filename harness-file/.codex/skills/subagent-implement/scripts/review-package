@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# 生成包含提交列表、文件统计和完整 diff 的审查包。
+# 标准输出仅返回审查包绝对路径，诊断信息写入标准错误。
+#
+# 用法：review-package PLAN_FILE BASE HEAD [OUTFILE]
+set -euo pipefail
+
+if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
+  echo "用法：review-package PLAN_FILE BASE HEAD [OUTFILE]" >&2
+  exit 2
+fi
+
+plan=$1
+base=$2
+head=$3
+
+if [ ! -f "$plan" ]; then
+  echo "错误：计划文件不存在：$plan" >&2
+  exit 2
+fi
+
+if ! git rev-parse --verify --quiet "${base}^{commit}" >/dev/null; then
+  echo "错误：BASE 不是有效提交：$base" >&2
+  exit 2
+fi
+
+if ! git rev-parse --verify --quiet "${head}^{commit}" >/dev/null; then
+  echo "错误：HEAD 不是有效提交：$head" >&2
+  exit 2
+fi
+
+if ! git merge-base --is-ancestor "$base" "$head"; then
+  echo "错误：BASE 不是 HEAD 的祖先：${base}..${head}" >&2
+  exit 2
+fi
+
+commits=$(git rev-list --count "${base}..${head}")
+if [ "$commits" -eq 0 ]; then
+  echo "错误：审查范围没有提交：${base}..${head}" >&2
+  exit 3
+fi
+
+if [ "$#" -eq 4 ]; then
+  out=$4
+  mkdir -p "$(dirname "$out")"
+else
+  dir=$(bash "$(cd "$(dirname "$0")" && pwd)/sdd-workspace" "$plan")
+  out="$dir/review-$(git rev-parse --short "$base")..$(git rev-parse --short "$head").diff"
+fi
+
+tmp="${out}.tmp.$$"
+trap 'rm -f "$tmp"' EXIT
+
+{
+  echo "# 审查包：${base}..${head}"
+  echo
+  echo "## 提交"
+  git log --oneline "${base}..${head}"
+  echo
+  echo "## 文件变更"
+  git diff --stat "${base}..${head}"
+  echo
+  echo "## Diff"
+  git diff -U10 "${base}..${head}"
+} > "$tmp"
+
+mv "$tmp" "$out"
+trap - EXIT
+out_dir=$(cd "$(dirname "$out")" && pwd -P)
+out_abs="$out_dir/$(basename "$out")"
+echo "已写入审查包：$out_abs（$commits 个提交，$(wc -c < "$out" | tr -d ' ') 字节）" >&2
+printf '%s\n' "$out_abs"
