@@ -36,7 +36,7 @@ if [ -z "$slug" ]; then
 fi
 
 key=$(printf '%s' "$plan_abs" | git hash-object --stdin | cut -c1-10)
-base="$root/.superpowers/sdd"
+base="$root/.codeforge/sdd"
 dir="$base/${slug}-${key}"
 
 mkdir -p "$dir"

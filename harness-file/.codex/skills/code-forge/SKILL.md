@@ -16,7 +16,7 @@ CodeForge 是**轻量编排框架**，以编排其它 skill 为主，核心做�
 
 1. **项目感知** — 自动探测语言/框架/构建工具，生成 `project_profile` 驱动后续阶段的自适应行为
 2. **状态检测** — 通过结构化状态文件 + 实际文件验证确定当前阶段和断点位置
-3. **阶段路由** — 加载对应 prompt 文件，按其中的流程调用原生 skill
+3. **阶段路由** — 加载对应 prompt 文件，按其中的流程调用 skill
 4. **Commit 纪律** — 每个 task/fix 完成后自动 commit，编译前置，不做 push
 
 CodeForge **不做**：
@@ -27,16 +27,16 @@ CodeForge **不做**：
 - 不重申 TDD 规则（由 `subagent-implement` 负责）
 - 不重申审查规则（由 `code-review` 负责）
 
-### 各阶段委托的原生 Skill
+### 各阶段委托的 Skill
 
-| 阶段 | 委托 Skill | 职责                           |
-|------|---------|------------------------------|
+| 阶段 | 委托 Skill | 职责                         |
+|------|---------|----------------------------|
 | propose | `openspec-propose` | 通过 CLI 创建变更目录 + 生成所有 artifacts（proposal、design、specs、tasks） |
 | propose | `plans` | 读取 openspec artifacts，生成实施计划 |
-| apply | `subagent-implement` 或 inline | 按计划执行实现，TDD + 子代理审查          |
-| apply | `verify` | 全量验证                         |
-| apply | `code-review` | 全局代码审查                       |
-| archive | `openspec-archive-change` | 通过 CLI 归档变更（含 spec sync）     |
+| apply | `subagent-implement` 或 inline | 按计划执行实现，TDD + 子智能体审查          |
+| apply | `verify` | 全量验证                       |
+| apply | `code-review` | 全局代码审查                     |
+| archive | `openspec-archive-change` | 通过 CLI 归档变更（含 spec sync）   |
 
 ## 前置检查
 
@@ -192,9 +192,9 @@ project_profile:
 
 根据检测结果，用 Read 工具加载对应文件并执行：
 
-- **propose 阶段** → 读取 skill 目录下的 `propose.md`，按其中流程执行
-- **apply 阶段** → 读取 skill 目录下的 `apply.md`，按其中流程执行
-- **archive 阶段** → 读取 skill 目录下的 `archive.md`，按其中流程执行
+- **propose 阶段** → 读取当前目录下的 `propose.md`，按其中流程执行
+- **apply 阶段** → 读取当前目录下的 `apply.md`，按其中流程执行
+- **archive 阶段** → 读取当前目录下的 `archive.md`，按其中流程执行
 
 加载后严格按照文件中定义的流程、出口条件和硬门执行，不要跳步。
 
