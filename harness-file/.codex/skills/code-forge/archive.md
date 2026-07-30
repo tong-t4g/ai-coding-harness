@@ -90,7 +90,7 @@
 
 **如果仍保留整个 change 的长期 worktree：**
 
-`subagent-implement` 创建的任务级临时 worktree 应已在 apply 阶段清理，不进入这里的分支处理。
+`subagent-implement` 创建的执行单元级临时 worktree 应已在 apply 阶段清理，不进入这里的分支处理。
 提示用户选择分支处理方式：
 
 1. **合并到主分支** — 在 worktree 中合并，清理 worktree

@@ -17,7 +17,7 @@ CodeForge 是**轻量编排框架**，以编排其它 skill 为主，核心做�
 1. **项目感知** — 自动探测语言/框架/构建工具，生成 `project_profile` 驱动后续阶段的自适应行为
 2. **状态检测** — 通过结构化状态文件 + 实际文件验证确定当前阶段和断点位置
 3. **阶段路由** — 加载对应 prompt 文件，按其中的流程调用 skill
-4. **Commit 纪律** — 每个 task/fix 完成后自动 commit，编译前置，不做 push
+4. **Commit 纪律** — 完整模式按执行单元、轻量模式按 task、修复按 fix 自动 commit，编译前置，不做 push
 
 CodeForge **不做**：
 
@@ -110,7 +110,7 @@ project_profile 不会直接传给 openspec-propose 或 plans（它们有自己�
 version: 1
 active_change: add-user-auth
 phase: propose | apply | archive
-checkpoint: profiler-done | requirements-confirmed | openspec-generated | plan-generated | plan-generated-and-confirmed | task-N-complete | verified | reviewed | apply-done | consistency-verified | archived | done
+checkpoint: profiler-done | requirements-confirmed | openspec-generated | plan-generated | plan-generated-and-confirmed | unit-N-complete | task-N-complete | verified | reviewed | apply-done | consistency-verified | archived | done
 project_profile:
   languages: [java]
   frameworks: [spring-boot]
@@ -155,7 +155,8 @@ project_profile:
 **phase = apply 时验证：**
 - `openspec/plans` 下是否有包含 `<!-- codeforge change: <active_change> -->` 的计划文件？ → 无则回退到 propose 阶段
 - 计划文件中是否至少有 1 个 checkbox？ → 无则回退到 propose 阶段（plan 不完整）
-- 如果 checkpoint 声称 `task-N-complete`：计划文件中对应的 checkbox 是否确实已勾选？ → 未勾选则回退到上一个确认一致的 checkpoint
+- 如果 checkpoint 声称 `unit-N-complete`：执行单元清单是否记录了集成提交，且该单元包含的全部 Task checkbox 是否已勾选？ → 任一不一致则回退到上一个确认一致的 checkpoint
+- 如果 checkpoint 声称 `task-N-complete`：这是轻量模式进度；计划文件中对应的 checkbox 是否确实已勾选？ → 未勾选则回退到上一个确认一致的 checkpoint
 
 **phase = archive 时验证：**
 - 所有计划 checkbox 是否已勾选？ → 未全勾选则修正状态文件为 `phase: apply, checkpoint: reviewed`，路由到 apply
@@ -211,7 +212,8 @@ project_profile:
 | openspec-propose 完成 | `checkpoint: openspec-generated` |
 | plans 完成 | `checkpoint: plan-generated` |
 | propose 用户确认进入 apply | `phase: apply`，`checkpoint: plan-generated-and-confirmed` |
-| apply 阶段每个 task 完成 | `checkpoint: task-N-complete` |
+| apply 完整模式每个执行单元完成 | `checkpoint: unit-N-complete` |
+| apply 轻量模式每个 task 完成 | `checkpoint: task-N-complete` |
 | apply 验证通过 | `checkpoint: verified` |
 | apply 审查通过 | `checkpoint: reviewed` |
 | apply 最终确认完成 | `phase: archive`，`checkpoint: apply-done` |

@@ -35,6 +35,10 @@ cat > "$repo/a/plan.md" <<'PLAN'
 ### 任务 2：第二项
 
 第二项内容。
+
+### 任务 3：第三项
+
+第三项内容。
 PLAN
 cat > "$repo/b/plan.md" <<'PLAN'
 # Compatibility Plan
@@ -110,67 +114,82 @@ else
   fi
 fi
 
-manifest=$(bash "$script_dir/task-worktree" prepare "$repo/a/plan.md" "$head" 1 2)
-manifest_again=$(bash "$script_dir/task-worktree" prepare "$repo/a/plan.md" "$head" 1 2)
+printf 'task\tbase\tpath\tintegrated\tcleaned\n' > "$workspace_b/worktrees.tsv"
+if bash "$script_dir/execution-worktree" integrate "$repo/b/plan.md" unit-1 >/dev/null 2>/dev/null; then
+  echo "错误：旧版任务级 worktree 清单未显式失败" >&2
+  exit 1
+fi
+rm "$workspace_b/worktrees.tsv"
+
+manifest=$(bash "$script_dir/execution-worktree" prepare "$repo/a/plan.md" "$head" unit-1=1,2 unit-2=3)
+manifest_again=$(bash "$script_dir/execution-worktree" prepare "$repo/a/plan.md" "$head" unit-1=1,2 unit-2=3)
 if [ "$manifest" != "$manifest_again" ]; then
   echo "错误：重复 prepare 未恢复同一份 worktree 清单" >&2
   exit 1
 fi
 
-worktree_1=$(awk -F '\t' '$1 == 1 { print $3 }' "$manifest")
-worktree_2=$(awk -F '\t' '$1 == 2 { print $3 }' "$manifest")
+worktree_1=$(awk -F '\t' '$1 == "unit-1" && $2 == "1,2" { print $4 }' "$manifest")
+worktree_2=$(awk -F '\t' '$1 == "unit-2" && $2 == "3" { print $4 }' "$manifest")
 if [ -z "$worktree_1" ] || [ -z "$worktree_2" ] || [ "$worktree_1" = "$worktree_2" ]; then
-  echo "错误：任务未映射到两个独立 worktree" >&2
+  echo "错误：三个任务未按 1,2 和 3 聚合到两个独立 worktree" >&2
   exit 1
 fi
 if [ "$(git -C "$repo" worktree list --porcelain | grep -c '^worktree ')" -ne 3 ]; then
-  echo "错误：并行准备后应存在主工作树和两个任务 worktree" >&2
+  echo "错误：并行准备后应存在主工作树和两个执行单元 worktree" >&2
+  exit 1
+fi
+if bash "$script_dir/execution-worktree" prepare "$repo/a/plan.md" "$head" unit-1=1,2 unit-2=2,3 >/dev/null 2>/dev/null; then
+  echo "错误：同一任务被分配到多个执行单元时未显式失败" >&2
   exit 1
 fi
 
 printf '任务一\n' > "$worktree_1/task-1.txt"
 git -C "$worktree_1" add task-1.txt
 git -C "$worktree_1" commit -q -m "任务一实现"
-printf '任务二\n' > "$worktree_2/task-2.txt"
-git -C "$worktree_2" add task-2.txt
-git -C "$worktree_2" commit -q -m "任务二实现"
+printf '任务二\n' > "$worktree_1/task-2.txt"
+git -C "$worktree_1" add task-2.txt
+git -C "$worktree_1" commit -q -m "任务二实现"
+printf '任务三\n' > "$worktree_2/task-3.txt"
+git -C "$worktree_2" add task-3.txt
+git -C "$worktree_2" commit -q -m "任务三实现"
 
-if [ -e "$repo/task-1.txt" ] || [ -e "$repo/task-2.txt" ]; then
-  echo "错误：任务提交在集成前泄漏到了主工作树" >&2
+if [ -e "$repo/task-1.txt" ] || [ -e "$repo/task-2.txt" ] || [ -e "$repo/task-3.txt" ]; then
+  echo "错误：执行单元提交在集成前泄漏到了主工作树" >&2
   exit 1
 fi
 
-bash "$script_dir/task-worktree" integrate "$repo/a/plan.md" 1 >/dev/null
+bash "$script_dir/execution-worktree" integrate "$repo/a/plan.md" unit-1 >/dev/null
 test -f "$repo/task-1.txt"
-git -C "$repo" commit -q -m "集成任务一"
-if bash "$script_dir/task-worktree" record "$repo/a/plan.md" 1 "$head" >/dev/null 2>/dev/null; then
+test -f "$repo/task-2.txt"
+git -C "$repo" commit -q -m "集成执行单元一"
+if bash "$script_dir/execution-worktree" record "$repo/a/plan.md" unit-1 "$head" >/dev/null 2>/dev/null; then
   echo "错误：record 接受了非当前 HEAD" >&2
   exit 1
 fi
-bash "$script_dir/task-worktree" record "$repo/a/plan.md" 1 "$(git -C "$repo" rev-parse HEAD)" >/dev/null
+bash "$script_dir/execution-worktree" record "$repo/a/plan.md" unit-1 "$(git -C "$repo" rev-parse HEAD)" >/dev/null
 
-bash "$script_dir/task-worktree" integrate "$repo/a/plan.md" 2 >/dev/null
-test -f "$repo/task-2.txt"
-git -C "$repo" commit -q -m "集成任务二"
-bash "$script_dir/task-worktree" record "$repo/a/plan.md" 2 "$(git -C "$repo" rev-parse HEAD)" >/dev/null
+bash "$script_dir/execution-worktree" integrate "$repo/a/plan.md" unit-2 >/dev/null
+test -f "$repo/task-3.txt"
+git -C "$repo" commit -q -m "集成执行单元二"
+bash "$script_dir/execution-worktree" record "$repo/a/plan.md" unit-2 "$(git -C "$repo" rev-parse HEAD)" >/dev/null
 
 printf '未提交\n' > "$worktree_2/dirty.txt"
-if bash "$script_dir/task-worktree" cleanup "$repo/a/plan.md" >/dev/null 2>/dev/null; then
+if bash "$script_dir/execution-worktree" cleanup "$repo/a/plan.md" >/dev/null 2>/dev/null; then
   echo "错误：清理操作没有拒绝脏 worktree" >&2
   exit 1
 fi
 rm "$worktree_2/dirty.txt"
-bash "$script_dir/task-worktree" cleanup "$repo/a/plan.md" >/dev/null
-bash "$script_dir/task-worktree" cleanup "$repo/a/plan.md" >/dev/null
+bash "$script_dir/execution-worktree" cleanup "$repo/a/plan.md" >/dev/null
+bash "$script_dir/execution-worktree" cleanup "$repo/a/plan.md" >/dev/null
 if [ "$(git -C "$repo" worktree list --porcelain | grep -c '^worktree ')" -ne 1 ]; then
-  echo "错误：清理后仍有任务 worktree" >&2
+  echo "错误：清理后仍有执行单元 worktree" >&2
   exit 1
 fi
 
 conflict_base=$(git -C "$repo" rev-parse HEAD)
-conflict_manifest=$(bash "$script_dir/task-worktree" prepare "$repo/c/plan.md" "$conflict_base" 1 2)
-conflict_worktree_1=$(awk -F '\t' '$1 == 1 { print $3 }' "$conflict_manifest")
-conflict_worktree_2=$(awk -F '\t' '$1 == 2 { print $3 }' "$conflict_manifest")
+conflict_manifest=$(bash "$script_dir/execution-worktree" prepare "$repo/c/plan.md" "$conflict_base" unit-1=1 unit-2=2)
+conflict_worktree_1=$(awk -F '\t' '$1 == "unit-1" { print $4 }' "$conflict_manifest")
+conflict_worktree_2=$(awk -F '\t' '$1 == "unit-2" { print $4 }' "$conflict_manifest")
 printf '任务一\n' > "$conflict_worktree_1/conflict.txt"
 git -C "$conflict_worktree_1" add conflict.txt
 git -C "$conflict_worktree_1" commit -q -m "冲突任务一"
@@ -178,13 +197,13 @@ printf '任务二\n' > "$conflict_worktree_2/conflict.txt"
 git -C "$conflict_worktree_2" add conflict.txt
 git -C "$conflict_worktree_2" commit -q -m "冲突任务二"
 
-bash "$script_dir/task-worktree" integrate "$repo/c/plan.md" 1 >/dev/null
-git -C "$repo" commit -q -m "集成冲突任务一"
-bash "$script_dir/task-worktree" record "$repo/c/plan.md" 1 "$(git -C "$repo" rev-parse HEAD)" >/dev/null
-if bash "$script_dir/task-worktree" integrate "$repo/c/plan.md" 2 >/dev/null 2>/dev/null; then
-  echo "错误：冲突任务被静默集成" >&2
+bash "$script_dir/execution-worktree" integrate "$repo/c/plan.md" unit-1 >/dev/null
+git -C "$repo" commit -q -m "集成冲突执行单元一"
+bash "$script_dir/execution-worktree" record "$repo/c/plan.md" unit-1 "$(git -C "$repo" rev-parse HEAD)" >/dev/null
+if bash "$script_dir/execution-worktree" integrate "$repo/c/plan.md" unit-2 >/dev/null 2>/dev/null; then
+  echo "错误：冲突执行单元被静默集成" >&2
   exit 1
 fi
 test -d "$conflict_worktree_2"
 
-echo "自检通过：任务 worktree 创建、恢复、隔离、集成、清理和冲突失败均符合预期"
+echo "自检通过：执行单元聚合、worktree 创建、恢复、隔离、集成、清理和冲突失败均符合预期"

@@ -1,13 +1,13 @@
 ---
 name: probe
-description: 持续深入追问用户有关计划、决策或想法的各个方面。适用于用户希望对自己的思路进行压力测试，或使用任何与“probe”相关的触发语时。
+description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'probe' trigger phrases.
 disable-model-invocation: true
 ---
 
-围绕此事的每个方面持续追问用户，直至双方达成共同理解。沿决策树逐个分支推进，逐一理清各项决策之间的依赖关系。每提出一个问题，都给出你推荐的答案。
+Interview me relentlessly about every aspect of this until we reach a shared understanding. Walk down each branch of the decision tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
 
-每次只问一个问题，等待用户反馈后再继续。一次提出多个问题会让人无所适从。
+Ask the questions one at a time, waiting for feedback on each question before continuing. Asking multiple questions at once is bewildering.
 
-如果某项*事实*可以通过检查环境（文件系统、工具等）查明，就自行查找，不要询问用户。但*决策*必须由用户作出：逐项请用户决定，并等待回答。
+If a *fact* can be found by exploring the environment (filesystem, tools, etc.), look it up rather than asking me. The *decisions*, though, are mine — put each one to me and wait for my answer.
 
-在用户确认双方已经达成共同理解之前，不要据此采取行动。
+Do not act on it until I confirm we have reached a shared understanding.
