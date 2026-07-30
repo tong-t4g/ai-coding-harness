@@ -4,28 +4,57 @@
 
 把用户的需求从模糊想法变成可执行的任务清单。通过项目感知 + 调用 skill 产出完整的规格文档和实现计划。
 
+## 前置检查
+
+检查项目根目录是否有 `openspec/`。没有则执行 `npx @fission-ai/openspec init`，然后再次检查；生成配置和 slash commands 属于正常副作用。初始化失败或目录仍不存在时返回 `BLOCKED`。
+
 ## 阶段流程
 
 ### 1. 项目分析（仅首次运行）
 
-如果 `.codeforge-state.yaml` 不存在或 `project_profile` 为空，执行项目分析器：
+如果 `.codeforge-state.yaml` 不存在或 `project_profile` 为空，按以下确定性规则执行项目分析器：
 
-1. **探测语言和框架**：扫描源码目录的文件扩展名 + 读取依赖配置文件
-2. **识别构建工具**：检测根目录的 `pom.xml`、`build.gradle`、`package.json`、`go.mod`、`Cargo.toml`、`pyproject.toml` 等
-3. **推导编译/测试命令**：根据构建工具映射（见 SKILL.md "构建命令映射"表）
-4. **判断项目结构**：单模块 vs 多模块/monorepo
-5. **检测 CI 配置**：是否有 `.github/workflows/`、`.gitlab-ci.yml`、`Jenkinsfile` 等
+| 检测项 | 检测方式 | 默认值 |
+|---|---|---|
+| **languages** | 统计 `src/`、`lib/`、`app/` 等源码目录下的文件扩展名，取占比最高的 1-2 种 | `[]` |
+| **frameworks** | 读取 `package.json` 的 dependencies/devDependencies、`pom.xml` 的 `<dependencies>`、`go.mod` 的 require 等提取关键框架名 | `[]` |
+| **build_tool** | `pom.xml` → maven；`build.gradle`/`build.gradle.kts` → gradle；`package.json` → 根据 lock 文件选择 npm/yarn/pnpm；`go.mod` → go；`Cargo.toml` → cargo；`pyproject.toml` → python | `unknown` |
+| **compile_command** | 根据下方构建命令映射推导 | `null` |
+| **compile_scope** | 默认全量编译；只有下方 scoped 降级验证通过后才改为 `scoped` | `full` |
+| **test_command** | 根据构建工具和测试目录推导 | `null` |
+| **structure** | 存在 `modules/`、`packages/`、多个 `pom.xml` 或 `go.work` 时为 `monorepo`，否则为 `single-module` | `single-module` |
+| **has_ci** | 检查 `.github/workflows/`、`.gitlab-ci.yml`、`Jenkinsfile`、`azure-pipelines.yml` 等 | `false` |
 
 分析完成后将 `project_profile` 写入 `.codeforge-state.yaml`，并更新 `phase: propose`、`checkpoint: profiler-done`。
 
-**命令运行时验证**：推导出 compile_command 后，必须实际运行一次验证其可用性。具体规则见 SKILL.md "命令运行时验证"段落。如果验证失败且为环境问题，立即阻塞并报告，等待用户提供正确的命令后再继续。
+**构建命令映射：**
+
+| build_tool | compile_command（默认） | test_command（默认） |
+|---|---|---|
+| maven | `mvn compile` | `mvn test` |
+| gradle | `./gradlew compileJava` | `./gradlew test` |
+| npm | `npm run build`（如果 script 存在） | `npm test`（如果 script 存在） |
+| yarn | `yarn build`（如果 script 存在） | `yarn test`（如果 script 存在） |
+| pnpm | `pnpm run build`（如果 script 存在） | `pnpm test`（如果 script 存在） |
+| go | `go build ./...` | `go test ./...` |
+| cargo | `cargo build` | `cargo test` |
+| python | `null`（跳过编译） | `pytest`（如果安装了） |
+| unknown | `null` | `null` |
+
+**命令运行时验证：**
+
+1. 执行前检查项目特有参数：Maven 根目录有 `settings.xml` 时附加 `-gs ./settings.xml`；Gradle 检查 `gradle.properties` 或 `local.properties`；npm、yarn、pnpm 检查 `.npmrc` 和对应 lock 文件。
+2. 实际运行推导出的 compile_command（非 null 时）。成功则写入 project_profile，并保持 `compile_scope: full`。
+3. 环境问题导致失败时，若 monorepo 的失败来自无关模块，尝试受影响模块的 scoped 编译（Maven：`mvn compile -pl <变更涉及模块> -am`；Gradle：`./gradlew :<模块>:compileJava`）。通过后把 `project_profile.compile_command` 改为已验证的 scoped 命令，并写入 `compile_scope: scoped`；apply 及后续任何构建验证都必须使用该命令，不得重新运行已知会因无关模块失败的全量命令。scoped 仍失败则返回 `BLOCKED`，等待用户提供正确命令。
+4. 已有代码错误导致失败时，记录命令可用，把代码错误留到 apply 阶段。
+5. test_command 不强制执行，但要确认测试框架已安装，例如检查 `pytest` 是否可用或检查 `package.json` 的 devDependencies。
 
 **空白项目（greenfield）处理：**
 如果是空项目（无源码、无配置），跳过分析，project_profile 保持默认空值。在需求确认步骤中一并确定技术栈，分析完成后补充 project_profile。
 
 ### 2. 需求确认（这一环节是我觉得是最该重视的环节）
 
-围绕用户需求的每个方面持续追问用户，直至双方达成一致理解，规则：
+围绕用户需求的每个方面持续追问用户，直至双方达成一致理解。每次需要用户答案时，按“阶段 Agent 接口”返回 `NEEDS_USER` 并停止；Coordinator 回传答案后再继续。规则：
 
 - 每次只问一个问题，等待用户反馈后再继续
 - 每提出一个问题，都给出你推荐的答案
@@ -137,7 +166,7 @@
 
 ### 5. 用户确认
 
-展示产出摘要，请用户确认「规格 OK，可以开始实现」：
+非自主模式通过 `CODEFORGE_RESULT.report` 展示产出摘要，并返回 `NEEDS_USER` 请用户确认「规格 OK，可以开始实现」：
 
 - 变更名和位置
 - 项目 profile 信息（语言、框架、构建工具）
@@ -152,7 +181,7 @@
 - 计划文件中至少有 1 个 checkbox
 - 用户明确确认可以进入构建阶段，或用户已声明自主执行模式
 
-出口时更新 `.codeforge-state.yaml`：`phase: apply`、`checkpoint: plan-generated-and-confirmed`。
+用户确认后更新 `.codeforge-state.yaml`：`phase: apply`、`checkpoint: plan-generated-and-confirmed`，再返回 `DONE`；自主执行模式在满足全部出口条件后直接更新并返回 `DONE`。`report` 至少包含变更名、artifacts、Task 数量和预计修改文件。
 
 ## 断点恢复
 

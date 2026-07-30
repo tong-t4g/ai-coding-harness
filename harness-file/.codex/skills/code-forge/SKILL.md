@@ -6,105 +6,101 @@ disable-model-invocation: false
 
 # CodeForge
 
-CodeForge 是一套规格驱动 + 工程纪律的完整开发工作流程。它会协调 OpenSpec（规格管理）和多个研发 skills，走完从需求、实现到归档的研发全流程。
+CodeForge 是一个薄 Coordinator。它只负责公共前置检查、状态验真、阶段路由、Agent 生命周期和用户交互转发；`propose`、`apply`、`archive` 的实际流程分别由独立阶段 Agent 执行。
 
-OpenSpec 管「做什么和为什么做」，各个研发 skills 管「怎么做和做得对不对」。CodeForge 是**轻量编排框架**：以编排 OpenSpec 和各研发 skills 为主（状态检测、阶段路由、commit 纪律），不重写原生 skill 的功能；另含自有的规格一致性验证、计划质量审查等显式增强（非纯透传）。
+## 唯一真值
 
-## 编排协议
+| 内容 | 唯一规则来源 |
+|---|---|
+| Coordinator、状态路由、Agent 交接 | 本文件 |
+| propose 阶段 | [propose.md](propose.md) |
+| apply 阶段 | [apply.md](apply.md) |
+| archive 阶段 | [archive.md](archive.md) |
 
-CodeForge 是**轻量编排框架**，以编排其它 skill 为主，核心做以下四件事：
+`.codex/agents/` 与 `.claude/agents/` 下的文件只是平台适配器，不得复制或改写上述流程。阶段 Agent 必须先完整读取本文件的“阶段 Agent 接口”，再完整读取对应阶段 Markdown。Agent 交接、用户交互、状态校准和结果返回以本文件为准；阶段内部流程、门禁、断点恢复和出口条件以对应阶段 Markdown 为准，适配器不得覆盖二者。
 
-1. **项目感知** — 自动探测语言/框架/构建工具，生成 `project_profile` 驱动后续阶段的自适应行为
-2. **状态检测** — 通过结构化状态文件 + 实际文件验证确定当前阶段和断点位置
-3. **阶段路由** — 加载对应 prompt 文件，按其中的流程调用 skill
-4. **Commit 纪律** — 完整模式按执行单元、轻量模式按 task、修复按 fix 自动 commit，编译前置，不做 push
+## Coordinator 职责
 
-CodeForge **不做**：
+Coordinator 只做以下事情：
 
-- 不手动创建 openspec artifacts（由 `openspec-propose` 负责）
-- 不手动转 tasks → plan（由 `plans` 负责）
-- 不手动执行归档操作（由 `openspec-archive-change` 负责）
-- 不重申 TDD 规则（由 `subagent-implement` 负责）
-- 不重申审查规则（由 `code-review` 负责）
+1. 只读检查 OpenSpec、`.codeforge-state.yaml` 和实际文件，只推导应启动的目标阶段。
+2. 按当前平台启动对应阶段 Agent；三个阶段必须顺序执行，同一阶段不得并发启动多个 Agent。
+3. 转发阶段 Agent 提出的单个用户问题，并把答案交回同一 Agent。
+4. 在阶段 Agent 返回 `DONE` 后独立核对阶段出口；通过则继续下一阶段，不通过则恢复当前阶段 Agent。
+5. 将阶段 Agent 返回的用户可见摘要展示给用户，但不把阶段内部推理或大段工作记录搬回主会话。
 
-### 各阶段委托的 Skill
-
-| 阶段 | 委托 Skill | 职责                         |
-|------|---------|----------------------------|
-| propose | `openspec-propose` | 通过 CLI 创建变更目录 + 生成所有 artifacts（proposal、design、specs、tasks） |
-| propose | `plans` | 读取 openspec artifacts，生成实施计划 |
-| apply | `subagent-implement` 或 inline | 按计划执行实现，TDD + 子智能体审查          |
-| apply | `verify` | 全量验证                       |
-| apply | `code-review` | 全局代码审查                     |
-| archive | `openspec-archive-change` | 通过 CLI 归档变更（含 spec sync）   |
+Coordinator 不执行阶段步骤，不调用阶段内部 skill，不写 `.codeforge-state.yaml`，也不修改业务代码。详细结果必须落在状态文件、OpenSpec artifacts、计划、报告或 Git 历史中；面向用户的简洁阶段摘要通过 `CODEFORGE_RESULT.report` 返回。
 
 ## 前置检查
 
-触发后先检查：
+只读检查项目根目录是否有 `openspec/`，仅用于确定是否必须路由到 propose。初始化 OpenSpec 和项目分析都属于 propose 阶段，由 propose Agent 按 `propose.md` 执行；propose Agent 会自行复查目录是否存在。
 
-**检查：OpenSpec** — 看项目根目录是否有 `openspec/`。没有则执行终端命令：`npx @fission-ai/openspec init` 后再次检查
+## 阶段 Agent
 
-注意：`openspec init` 除了创建 `openspec/` 目录外，还会生成配置文件和 slash commands。这些都是正常的副作用，不需要特别处理。
+| phase | Codex agent type | Claude Code agent |
+|---|---|---|
+| `propose` | `codeforge_propose` | `codeforge-propose` |
+| `apply` | `codeforge_apply` | `codeforge-apply` |
+| `archive` | `codeforge_archive` | `codeforge-archive` |
 
-检查通过后才可继续。
+启动阶段 Agent 时使用独立上下文，但不要为阶段 Agent 启用平台级 worktree isolation。使用以下输入包，不依赖主会话中的隐式上下文：
 
-## 项目分析器
+```yaml
+CODEFORGE_CONTEXT:
+  repo_root: <仓库根目录>
+  routed_phase: propose | apply | archive
+  route_reason: automatic | user-requested
+  user_request: <用户原始请求>
+  confirmed_answers: [<此前已确认的全部用户答案>]
+  state_file: .codeforge-state.yaml
+```
 
-前提检查通过后，**在首次运行或状态文件不存在时**，自动扫描项目生成 project_profile。结果保存到 `.codeforge-state.yaml` 的 `project_profile` 字段。
+阶段 Agent 在执行阶段步骤前必须重新检查实际文件，并按对应阶段 Markdown 的断点恢复规则推导最近一个可证明的 checkpoint。目标阶段正确但状态过期时，由阶段 Agent 写入 `.codeforge-state.yaml` 后继续；自动路由下实际文件支持另一个阶段时，阶段 Agent 先持久化最近一个可证明的 phase/checkpoint，再返回 `REROUTE`。`route_reason: user-requested` 时不得仅因自动路由结果不同而改道，但仍须验证指定阶段的前置条件。无法唯一判断 active change 时返回 `NEEDS_USER`，无法证明安全恢复点时返回 `BLOCKED`。Coordinator 始终不写状态文件。
 
-### 检测逻辑
+若阶段内部需要实现者或审查者，由阶段 Agent 按对应 Markdown 和被调用 skill 的规则继续分派。平台必须允许两层 Agent 深度：Coordinator -> 阶段 Agent -> 执行/审查 Agent。实现者必须能写入分配给它的 worktree，审查者必须保持只读；平台无法提供所需深度或权限时返回 `BLOCKED`，不得静默改用另一种执行模式或把未执行工作报告为完成。
 
-| 检测项 | 检测方式 | 默认值 |
-|--------|---------|--------|
-| **languages** | 统计 `src/`、`lib/`、`app/` 等源码目录下的文件扩展名，取占比最高的 1-2 种 | `[]` |
-| **frameworks** | 读取 `package.json` 的 dependencies/devDependencies、`pom.xml` 的 `<dependencies>`、`go.mod` 的 require 等提取关键框架名 | `[]` |
-| **build_tool** | 检测根目录配置文件：`pom.xml` → maven，`build.gradle`/`build.gradle.kts` → gradle，`package.json` → npm/yarn/pnpm（看 lock 文件），`go.mod` → go，`Cargo.toml` → cargo，`pyproject.toml` → python | `unknown` |
-| **compile_command** | 根据 build_tool 自动推导，见下方"构建命令映射" | `null` |
-| **test_command** | 根据 build_tool + 测试目录推导，见下方"构建命令映射" | `null` |
-| **structure** | 检查子目录模式：有 `modules/`/`packages/`/多个 `pom.xml`/`go.work` → `monorepo`；否则 → `single-module` | `single-module` |
-| **has_ci** | 检查 `.github/workflows/`、`.gitlab-ci.yml`、`Jenkinsfile`、`azure-pipelines.yml` 等 | `false` |
+## 阶段 Agent 接口
 
-### 构建命令映射
+阶段 Agent 每次运行到“阶段完成”“需要重新路由”“需要用户决定”或“无法继续”即停止。阶段文档以及其调用的下层 skill 中的所有询问、确认和选择，都不得在阶段 Agent 上下文中直接调用用户交互工具，而要通过以下结果交回 Coordinator：
 
-下表为默认推导值。项目分析器会在推导后执行**运行时验证**（见下方），根据实际环境校准命令。
+```yaml
+CODEFORGE_RESULT:
+  status: DONE | REROUTE | NEEDS_USER | BLOCKED
+  phase: <返回结果的阶段 Agent；propose | apply | archive>
+  checkpoint: <状态文件中已持久化的 checkpoint，或 none>
+  summary: <不超过一句话>
+  next_phase: <仅 REROUTE；propose | apply | archive>
+  question: <仅 NEEDS_USER；一次只写一个问题>
+  recommendation: <仅 NEEDS_USER；给出推荐答案及理由>
+  blocker: <仅 BLOCKED；写明失败条件>
+  recovery: <仅 BLOCKED；写明继续所需条件>
+  report:
+    - <可选；最多 8 条需要展示给用户的简洁阶段摘要>
+  evidence:
+    - <最多 3 个仓库相对路径、commit 或命令结果摘要>
+```
 
-| build_tool | compile_command（默认） | test_command（默认） |
-|------------|----------------|--------------|
-| maven | `mvn compile` | `mvn test` |
-| gradle | `./gradlew compileJava` | `./gradlew test` |
-| npm | `npm run build`（如果 script 存在） | `npm test`（如果 script 存在） |
-| go | `go build ./...` | `go test ./...` |
-| cargo | `cargo build` | `cargo test` |
-| python | `null`（跳过编译） | `pytest`（如果安装了） |
-| unknown | `null` | `null` |
+状态含义：
 
-### 命令运行时验证
+- `DONE`：对应阶段 Markdown 的出口条件已满足，状态文件已推进到下一 phase；archive 完成时状态文件已按规则删除。
+- `REROUTE`：实际文件证明应进入另一个阶段；阶段 Agent 已把状态修正到最近一个可证明的 phase/checkpoint，但没有执行当前阶段的后续步骤。
+- `NEEDS_USER`：只包含一个必须由用户作出的决定。返回前持久化已完成工作，但不得越过当前 checkpoint。
+- `BLOCKED`：存在无法自行改变的失败条件。必须写清已检查内容和可恢复条件，不能静默跳过。
 
-默认推导完成后，按以下顺序验证（先检测参数，再执行验证）：
+Coordinator 对结果的处理：
 
-1. **项目特有参数检测**（在执行命令之前）：检查项目配置文件中是否有需要额外传入的参数：
-   - Maven：检查根目录是否有 `settings.xml`，有则 compile_command 附加 `-gs ./settings.xml`
-   - Gradle：检查是否有自定义 `gradle.properties` 或 `local.properties`
-   - npm：检查 `.npmrc` 是否有 registry 配置
-2. **执行编译命令**：运行调整后的 compile_command（如果非 null）
-3. **成功**：确认命令可用，写入 project_profile
-4. **失败且为环境问题**（JDK/Node 版本不匹配、依赖下载失败等）：**先尝试 scoped 降级**——若是 monorepo 且失败来自无关模块的依赖解析（如某子模块第三方依赖在私有仓库缺失，与本次改动无关），改用受影响模块的 scoped 编译（Maven：`mvn compile -pl <变更涉及模块> -am`；Gradle：`./gradlew :<模块>:compileJava`）。scoped 编译通过则命令可用，写入 project_profile 并标注 scoped 模式（apply/archive 的全量编译验证同样降级为 scoped）；scoped 仍失败再**立即阻塞并报告**，等待用户确认正确的命令
-5. **失败且为代码问题**（已有代码编译错误）：命令本身可用，写入 project_profile，编译错误留到 apply 阶段处理
-6. **test_command**：不强制运行（可能依赖外部服务），但检查 test framework 是否安装（如 `which pytest`、检查 `package.json` 的 devDependencies）
+- `NEEDS_USER`：向用户原样提出 `question` 和 `recommendation`；得到答案后恢复同一阶段 Agent。
+- `BLOCKED`：向用户报告 `blocker`、`recovery` 和证据，停止自动推进。
+- `REROUTE`：独立核对状态修正与实际文件；一致则启动 `next_phase` Agent，不一致则把缺口交回原阶段 Agent。
+- `DONE`：不信任文字结论，按对应阶段 Markdown 的出口条件检查实际文件。通过后重新读取状态并路由；不通过则把缺口交回同一阶段 Agent。
 
-### 项目 profile 的传递方式
+任何状态的 `report` 非空时，Coordinator 都先向用户展示；`NEEDS_USER` 随后再提出单个问题。下层 skill 如果尝试提问，阶段 Agent 必须把该问题转换为 `NEEDS_USER`，不得让下层 skill 绕过 Coordinator。
 
-project_profile 不会直接传给 openspec-propose 或 plans（它们有自己的上下文读取机制），但 CodeForge 在调用它们之前，会将 profile 信息作为**上下文前缀**拼接到 args 中：
+优先恢复原阶段 Agent。平台无法恢复时，启动同类型新 Agent，并重新传入用户原始请求和全部已确认答案；新 Agent 仍须从状态文件和 artifacts 恢复。
 
-- 调用 `openspec-propose` 时，在 description 前附加 `[项目: {languages} + {frameworks}, 构建: {build_tool}]`
-- 调用 `plans` 时，在 args 中附加 `项目技术栈: {languages} + {frameworks}，构建工具: {build_tool}，测试框架: {test_command}`
-- apply 阶段使用 `compile_command` 和 `test_command` 驱动编译检查和验证
+## 状态文件
 
-## 状态管理
-
-### 状态文件：`.codeforge-state.yaml`
-
-位于项目根目录，CodeForge 的**快速路由入口**。结构：
+项目根目录的 `.codeforge-state.yaml` 是快速路由缓存：
 
 ```yaml
 version: 1
@@ -116,107 +112,35 @@ project_profile:
   frameworks: [spring-boot]
   build_tool: maven
   compile_command: mvn compile
+  compile_scope: full | scoped
   test_command: mvn test
   structure: single-module
   has_ci: true
 ```
 
-### 安全策略：状态文件 vs 实际文件
+实际文件是 ground truth，状态文件只是缓存。阶段入口、断点恢复和阶段出口都必须核对实际文件。Coordinator 只选择目标阶段；阶段 Agent 负责推导并持久化最近一个可证明的 phase/checkpoint。
 
-状态文件用于快速路由（避免每次扫描所有目录），但在**关键节点**必须验证实际文件状态：
+## 状态检测与路由
 
-| 时机 | 验证内容 | 不一致处理 |
-|------|---------|-----------|
-| 阶段入口 | 状态文件声称的 phase 对应的文件是否存在 | 修正状态文件，路由到实际状态对应的阶段 |
-| 断点恢复 | checkpoint 声称的进度是否与实际文件一致 | 回退到最近一个确认一致的状态 |
-| 阶段出口 | 出口条件对应的实际文件是否满足 | 不满足则不退出，继续当前阶段 |
+1. 读取 `.codeforge-state.yaml`。不存在时扫描实际文件；没有可恢复变更则路由到 propose。
+2. 若存在多个活跃变更且无法从 `active_change` 唯一确定目标，Coordinator 直接让用户选择，并把答案加入 `confirmed_answers`。
+3. 按状态文件和实际文件选择目标阶段，但不写文件：
+   - `propose`：没有与 `active_change` 绑定且含 checkbox 的计划时进入 propose；已有有效计划时进入 apply。
+   - `apply`：缺少有效计划时进入 propose；计划存在且仍需实现、验证或审查时进入 apply。
+   - `archive`：计划未全部完成时进入 apply；apply 出口满足后进入 archive。归档内部 checkpoint 和 `.close-verification-done` 只按 `archive.md` 判断。
+4. 无状态文件但存在一个活跃变更时：无有效计划路由 propose；计划有未完成 checkbox 路由 apply；计划全部完成仍先路由 apply 做验证和审查。
+5. 将目标阶段放入 `CODEFORGE_CONTEXT`，启动对应阶段 Agent；该 Agent 验证并持久化状态修正后再执行阶段步骤。
 
-**原则**：实际文件状态是 ground truth，状态文件只是缓存。两者冲突时，以实际文件为准并修正状态文件。
+用户明确指定阶段时，跳过自动阶段选择并路由到指定阶段 Agent，但仍须检查该阶段的前置条件。满足时由阶段 Agent 把状态校准到指定阶段；不满足时返回 `NEEDS_USER` 或 `BLOCKED`，不得伪造状态或自动越过用户指定的阶段。
 
-## 状态检测
+## 阶段出口
 
-检查 `.codeforge-state.yaml` 和实际文件状态，确定应该进入哪个阶段：
+Coordinator 在 `DONE` 后读取对应阶段 Markdown 的“出口条件”并逐项验真：
 
-### Step 1：读取状态文件
+| 完成阶段 | 必须观察到的状态 |
+|---|---|
+| propose | `phase: apply`、`checkpoint: plan-generated-and-confirmed` |
+| apply | `phase: archive`、`checkpoint: apply-done` |
+| archive | 变更已归档且 `.codeforge-state.yaml` 已删除 |
 
-- 状态文件不存在 → 这是首次运行，执行项目分析器，然后进入 propose 阶段
-- 状态文件存在 → 读取 phase 和 checkpoint
-
-### Step 2：验证状态文件与实际文件一致性
-
-根据状态文件中的 phase，验证对应的前提条件：
-
-**phase = propose 时验证：**
-- `openspec/changes/` 下是否有活跃（非 archive）变更目录？ → 无则一致（propose 刚开始）
-- **通用规则（适用于所有 checkpoint）**：如果有活跃变更目录且 `openspec/plans` 下有对应的计划文件（含 `<!-- codeforge change: <active_change> -->`），说明实际进度已进入 apply 阶段，修正 `phase: apply`，根据 checkbox 状态判定 checkpoint
-- 如果有活跃变更目录但无计划文件：根据变更目录下 artifacts 的完整程度判定 checkpoint（artifacts 完整 → `openspec-generated`，不完整 → `requirements-confirmed`）
-- 如果 checkpoint ≥ `openspec-generated`：变更目录下的 artifacts 是否存在且非空？ → 有空文件则回退 checkpoint 到 `requirements-confirmed`
-
-**phase = apply 时验证：**
-- `openspec/plans` 下是否有包含 `<!-- codeforge change: <active_change> -->` 的计划文件？ → 无则回退到 propose 阶段
-- 计划文件中是否至少有 1 个 checkbox？ → 无则回退到 propose 阶段（plan 不完整）
-- 如果 checkpoint 声称 `unit-N-complete`：执行单元清单是否记录了集成提交，且该单元包含的全部 Task checkbox 是否已勾选？ → 任一不一致则回退到上一个确认一致的 checkpoint
-- 如果 checkpoint 声称 `task-N-complete`：这是轻量模式进度；计划文件中对应的 checkbox 是否确实已勾选？ → 未勾选则回退到上一个确认一致的 checkpoint
-
-**phase = archive 时验证：**
-- 所有计划 checkbox 是否已勾选？ → 未全勾选则修正状态文件为 `phase: apply, checkpoint: reviewed`，路由到 apply
-- 如果 checkpoint ≥ `consistency-verified`：`openspec/changes/archive/` 下是否有对应目录？ → 无则回退到 `consistency-verified`（重做归档）
-- 如果 checkpoint ≥ `archived`：`openspec/changes/archive/` 下是否有对应目录？ → 无则回退到 `consistency-verified`（归档中断）
-- **注意**：`.close-verification-done` 的存在性由 archive.md 内部处理（断点恢复表），SKILL.md 不据此覆盖 checkpoint，避免基于过期文件做错误路由
-
-### Step 3：路由
-
-| 状态文件 phase | 验证结果 | 路由到 |
-|---------------|---------|--------|
-| propose | 一致 | propose 阶段（从 checkpoint 恢复） |
-| propose | 不一致（artifacts 缺失） | propose 阶段（回退 checkpoint） |
-| apply | 一致 | apply 阶段（从 checkpoint 恢复） |
-| apply | plan 不存在或不完整 | propose 阶段 |
-| archive | 一致 | archive 阶段（从 checkpoint 恢复） |
-| archive | apply 未完成 | apply 阶段 |
-
-### Step 4：无状态文件时的降级检测
-
-如果状态文件不存在（可能是旧项目或手动删除），降级为文件扫描检测：
-
-| 检查项 | 怎么查 | 结果 |
-|--------|--------|------|
-| 有活跃变更？ | `openspec/changes/` 下是否有非 archive 子目录 | 有 → 继续检查 |
-| 有多个活跃变更？ | 活跃变更数量 > 1 | 是 → 让用户选择继续哪个 |
-| 有计划文件？ | `openspec/plans` 下是否有与活跃变更对应的计划文件（文件含 `<!-- codeforge change: <name> -->`） | 有 → 看实现状态 |
-| 计划文件有效？ | 计划文件中是否至少有 1 个 checkbox | 无 → propose 阶段 |
-| checkbox 状态？ | checkbox 全部未勾选 | → apply 阶段（全新执行） |
-| checkbox 状态？ | checkbox 部分已勾选 | → apply 阶段（断点恢复） |
-| checkbox 状态？ | checkbox 全部已勾选 | → apply 阶段（验证→审查→自动进入 archive） |
-
-## 路由
-
-根据检测结果，用 Read 工具加载对应文件并执行：
-
-- **propose 阶段** → 读取当前目录下的 `propose.md`，按其中流程执行
-- **apply 阶段** → 读取当前目录下的 `apply.md`，按其中流程执行
-- **archive 阶段** → 读取当前目录下的 `archive.md`，按其中流程执行
-
-加载后严格按照文件中定义的流程、出口条件和硬门执行，不要跳步。
-
-## 用户意图覆盖
-
-如果用户明确指定了阶段（如「先做规格」「直接开始实现」「归档收尾」），以用户意图为准，跳过状态检测直接加载对应文件。但如果前置条件不满足（如用户说「直接实现」但 `openspec/plans` 下没有计划文件），需要提醒用户先完成前置阶段。
-
-## 状态文件更新时机
-
-| 时机 | 更新内容 |
-|------|---------|
-| 项目分析器完成 | 写入 `project_profile`，`phase: propose`，`checkpoint: profiler-done` |
-| propose 阶段需求确认完成 | `checkpoint: requirements-confirmed`，`active_change: <变更名>` |
-| openspec-propose 完成 | `checkpoint: openspec-generated` |
-| plans 完成 | `checkpoint: plan-generated` |
-| propose 用户确认进入 apply | `phase: apply`，`checkpoint: plan-generated-and-confirmed` |
-| apply 完整模式每个执行单元完成 | `checkpoint: unit-N-complete` |
-| apply 轻量模式每个 task 完成 | `checkpoint: task-N-complete` |
-| apply 验证通过 | `checkpoint: verified` |
-| apply 审查通过 | `checkpoint: reviewed` |
-| apply 最终确认完成 | `phase: archive`，`checkpoint: apply-done` |
-| archive 一致性验证通过 | `checkpoint: consistency-verified` |
-| archive 归档完成 | `checkpoint: archived` |
-| archive 全部完成 | `checkpoint: done`，删除状态文件 |
+出口不满足时不得启动下一阶段。出口满足后立即重新路由；因此一次 CodeForge 调用会持续推进，直到流程完成、需要用户决定或显式阻塞。

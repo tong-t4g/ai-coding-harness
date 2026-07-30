@@ -40,15 +40,6 @@ design.md -- 技术实现方案/设计文档
 tasks.md -- 实现清单/任务列表
 
 
-
-是否需要一个单独的 workflow.yaml 来定义流程？
-
-流程状态外置（state.json,状态维护最好提供skill和脚本，确保状态维护的正确性）。门禁状态看写到同一个文件中，还是新建一个文件。门禁有：编译、单侧、部署等。门禁需要在特定环节使用hook来检查
-
-
-要求：
-占用context window 的步骤都使用 subagent 调用 skill 的方式
-
 待办任务项：
 -- 是否删除 plans 中的“接口定义”部分，因为是打算在一个会话/subagent 中实现全部任务的，不需要这一部分。还是说做成一个任务交给一个 subagent?
 -- plans 中的“执行交接”是否要删除，因为整个流程已经自动化了
@@ -57,12 +48,10 @@ tasks.md -- 实现清单/任务列表
 任务实现者、审查者是分开的两个 subagent，看是不是合并起来比较好
 存在多次的审查和 codereview,看要不要合并，怎么合并
 仔细检查和验证 subagent 的使用，既要减少单一会话窗口的使用大小，也不能有太深的会话嵌套
-请你先梳理下 code-forge skill 的执行流程和环节，然后用一个例子，向我讲解一下它的流程是怎样的，各环节有几个 subagent 产生
 agent 间的传递的信息
 什么环节设计成 agent 比较好
 
 检查一下所有文件引用的路径是否正确，agent 是否可以找到文件
-将业务规格文件放到合适的引用位置
 
 plan 中的“头脑风暴阶段”是没有的，要看下怎么处理
 要获取到语言的版本、框架的版本，这两部分信息是会影响代码生成的
@@ -74,9 +63,15 @@ plan 中的“头脑风暴阶段”是没有的，要看下怎么处理
 看是否可以使用指令代替openspec skill。因为这样就不需要生成skill文件了。但openspec 目录还是需要生成的。
 
 翻译skills
+将业务规格文件放到合适的引用位置
 重写其它文件、删除无用的内容
+加一个让 AI 把值得更新到 docs 中的知识更新到合适位置（主要是一些架构约束、隐含业务约束）的 skill 或  subagent 。在更高层的流程调用中调用。
 
 可以先不支持其它 coding agent。先把自动化安装做了，先测试起来
+
+增加一个部署 uat 环境的 skill
+
+将 openspec 的安装集成到 ai-coding-harness 的安装过程中
 
 
 
@@ -87,16 +82,14 @@ spec-superflow 直接就是融合了 superpower openspec 的代码   https://git
 HyperSpec 协调 OpenSpec（规格管理）和 Superpowers,一个很简单的工程。  https://github.com/wind7rui/HyperSpec
 https://github.com/devcxl/superpowers-zh
 
-加一个让 AI 把值得更新到 docs 中的知识更新到合适位置（主要是一些架构约束、隐含业务约束）的 skill 或  subagent 。在更高层的流程调用中调用。
+
 
 有哪些环节是要加在 hooks 中的？
 上下文压缩后，触发 cat 重要的规则文件。在CC 中压缩之后两层 CLAUDE.md、MEMORY.md 不会丢失，对话中的信息、skill内容、被引用的下层rules都很可能丢失。所以应该重新读取重要的下层rules。
 对于规则强制检查，如必须生成单测，其实对于不同场景的 coding 没有太多普遍适用的必须要强制的检查。但在具体的业务流程中是有很多要强制检查的。
 openspec 和 开发流程 能不能结合 /goal 使用？
 
-将 ATDD 融入流程(openspec 已经遵循ATDD的思想了)
 
-将 openspec 的安装集成到 ai-coding-harness 的安装过程中
 
 
 

@@ -2,5 +2,21 @@ approval_policy = "on-request"
 approvals_reviewer = "user"
 sandbox_mode = "read-only"
 
+[agents]
+max_threads = 6
+max_depth = 2
+
+[agents.codeforge_propose]
+description = "执行 CodeForge propose 阶段，并把阶段结果交回 Coordinator"
+config_file = "agents/codeforge-propose.toml"
+
+[agents.codeforge_apply]
+description = "执行 CodeForge apply 阶段，并把阶段结果交回 Coordinator"
+config_file = "agents/codeforge-apply.toml"
+
+[agents.codeforge_archive]
+description = "执行 CodeForge archive 阶段，并把阶段结果交回 Coordinator"
+config_file = "agents/codeforge-archive.toml"
+
 [windows]
 sandbox = "elevated"

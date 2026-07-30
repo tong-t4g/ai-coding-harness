@@ -6,15 +6,15 @@
 
 ## 前置检查
 
-1. 确认 `openspec/plans/` 下有实现计划文件（`YYYY-MM-DD-<变更名>.md`）
-2. 如果没有实现计划文件，但有 `openspec/changes/` 下的活跃变更 → 提示用户：`回到 /code-forge 进入 propose 阶段完成计划生成`
-3. 读取 `.codeforge-state.yaml` 的 `project_profile`，获取 `compile_command` 和 `test_command`
+1. 确认 `openspec/plans/` 下有与 `active_change` 绑定、包含至少 1 个 checkbox 的实现计划文件（`YYYY-MM-DD-<变更名>.md`）。
+2. 如果计划不存在或不完整：自动路由时，按实际 artifacts 把 `.codeforge-state.yaml` 修正为 `phase: propose` 和最近一个可证明的 checkpoint，然后返回 `REROUTE`；用户明确指定 apply 时返回 `NEEDS_USER`，说明缺少前置计划并推荐先回到 propose。
+3. 读取 `.codeforge-state.yaml` 的 `project_profile`，获取 `compile_command`、`compile_scope` 和 `test_command`；旧状态没有 `compile_scope` 时按 `full` 处理。
 
 ## 环境检查
 
 在开始实现前，验证编译环境是否可用：
 
-1. **验证编译**：运行 `compile_command`（来自 project_profile）
+1. **验证编译**：运行 `compile_command`（来自 project_profile；`compile_scope: scoped` 时该命令已包含模块范围）
    - 如果 compile_command 为 null（如纯 Python/前端项目），跳过编译检查
    - 如果编译失败且原因是环境问题（如 JDK 版本不匹配、Node 版本不匹配），**立即阻塞并报告**，等待用户确认
    - 如果编译失败是代码问题，正常进入实现阶段（TDD 会逐步修复）
@@ -118,7 +118,7 @@
 
 修复完成后回到 Step 2(验证完成) 重新验证，再重新审查(Step 3)，直到审查通过。
 
-**重试上限**：如果全局审查循环超过 3 次仍有 Critical 问题，提示用户：「审查反复不通过，可能需要回到 propose 阶段重新审视设计方案。」让用户决定是否继续。
+**重试上限**：如果全局审查循环超过 3 次仍有 Critical 问题，返回 `NEEDS_USER`，询问用户是继续修复还是回到 propose 阶段重新审视设计方案，并给出推荐选择。
 
 审查通过后更新 `.codeforge-state.yaml`：`checkpoint: reviewed`。
 
@@ -127,21 +127,21 @@
 Step 2 验证通过 + Step 3 审查通过后：
 
 1. **同步 tasks.md 状态**：将 `openspec/changes/<变更名>/tasks.md` 中所有任务的完成状态标记为已完成（与 openspec/plans 中的 checkbox 状态对齐）
-2. 向用户展示变更摘要（改动文件列表、commit 列表、验证结果、审查结论）
+2. 通过 `CODEFORGE_RESULT.report` 返回变更摘要（改动文件列表、commit 列表、验证结果、审查结论）
 
-此步骤是 apply 阶段的最终出口，完成后更新 `.codeforge-state.yaml`：`phase: archive`、`checkpoint: apply-done`，然后自动进入 archive 阶段。
+此步骤是 apply 阶段的最终出口，完成后更新 `.codeforge-state.yaml`：`phase: archive`、`checkpoint: apply-done`，返回 `DONE`，由 Coordinator 自动路由到 archive Agent。
 
 ## 出口条件
 
 - `openspec/plans/` 下的计划文件中所有 checkbox 已勾选
-- 全量编译通过（或 compile_command 为 null）
+- `project_profile.compile_command` 对应的 full 或 scoped 编译通过（或 compile_command 为 null）
 - 测试全部通过（或 test_command 为 null）
 - 代码审查无 Critical 级别问题
 - `openspec/changes/<变更名>/tasks.md` 中所有任务标记为已完成（在 Step 4 统一同步）
 
 ## 断点恢复
 
-1. **计划文件完整性**：如果计划文件存在但不完整（缺少头部或 checkbox），提示用户回到 propose 阶段重新生成
+1. **计划文件完整性**：如果计划文件不存在或不完整（缺少绑定头部或 checkbox），自动路由时修正状态并返回 `REROUTE` 到 propose；用户明确指定 apply 时返回 `NEEDS_USER`
 2. **状态文件过期**：轻量模式按 Task checkbox 核对；完整模式同时核对执行单元清单、集成提交和该单元全部 Task checkbox。不一致时回退到上一个确认一致的 checkpoint
 3. **完整模式 worktree 状态**：同时读取 worktree 清单和进度账本；已审查但未集成的执行单元从串行集成继续，已提交但未记录的执行单元补跑 `record`
 4. **环境检查**：断点恢复时跳过环境检查（已在首次运行时验证），直接进入执行
@@ -153,7 +153,7 @@ Step 2 验证通过 + Step 3 审查通过后：
 2. 重新提交审查
 3. 循环直到通过
 
-如果同一执行单元修改 3 次以上仍不通过，提示用户：「这个执行单元反复审查不通过，可能需要回到 propose 阶段重新审视设计方案。」
+如果同一执行单元修改 3 次以上仍不通过，返回 `NEEDS_USER`，询问用户是继续修改还是回到 propose 阶段重新审视设计方案，并给出推荐选择。
 
 ## 硬门
 

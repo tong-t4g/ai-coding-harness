@@ -13,7 +13,7 @@
 - 代码审查无 Critical 问题
 - `.codeforge-state.yaml` 的 checkpoint 为 `apply-done`、`consistency-verified`、`archived` 或 `done` 之一
 
-如果前置条件不满足，提示：「apply 阶段尚未完成，请先运行 /code-forge」
+如果前置条件不满足：自动路由时，按计划、测试和审查的实际证据把 `.codeforge-state.yaml` 修正为 `phase: apply` 和最近一个可证明的 checkpoint，然后返回 `REROUTE`；用户明确指定 archive 时返回 `NEEDS_USER`，说明未满足的前置条件并推荐先回到 apply。
 
 ## 阶段流程
 
@@ -38,12 +38,12 @@
 
 ### 2. 处理不一致
 
-如果验证发现不一致，逐项列出并让用户选择：
+如果验证发现不一致，通过 `CODEFORGE_RESULT.report` 逐项列出，并返回 `NEEDS_USER` 让用户选择：
 
 **选项 A：改代码**
 - 标记哪些代码需要修改
 - 询问用户是否在本阶段直接修复（简单修复）或回到 apply 阶段（复杂修复）
-- 如果用户选择回到 apply 阶段：更新 `.codeforge-state.yaml` 为 `phase: apply, checkpoint: reviewed`，然后结束 archive 阶段
+- 如果用户选择回到 apply 阶段：更新 `.codeforge-state.yaml` 为 `phase: apply, checkpoint: reviewed`，返回 `REROUTE`，由 Coordinator 启动 apply Agent
 
 **选项 B：改规格**
 - 标记哪些规格文档需要更新
@@ -64,17 +64,18 @@
 
 **做法：**
 
-1. 宣布："调用 openspec-archive-change 归档变更"
-2. 使用 Skill 工具调用 `openspec-archive-change`，args 格式：`<变更名>`
-3. `openspec-archive-change` 会自动执行：
+1. 通过 `CODEFORGE_RESULT.report` 展示 Step 1 的验证结果。除非用户已声明自主执行或 `confirmed_answers` 已包含本次归档确认，否则返回 `NEEDS_USER` 询问是否归档，并停止当前 Agent。
+2. 用户确认后宣布："调用 openspec-archive-change 归档变更"。
+3. 使用 Skill 工具调用 `openspec-archive-change`，args 格式：`<变更名>；用户已在 CodeForge Coordinator 确认归档，请勿再次直接提问`。
+4. `openspec-archive-change` 会自动执行：
    - 检查 artifact 完成状态（通过 CLI）
    - 检查 task 完成状态（读 tasks.md）
    - 评估 spec sync 状态（对比 delta specs 和主规格库）
    - 执行归档：`mv openspec/changes/<name> openspec/changes/archive/YYYY-MM-DD-<name>`
    - 展示归档摘要
-4. 等待 skill 完成后，确认归档成功：检查 `openspec/changes/archive/` 下是否有对应目录，且原活跃变更目录已移除
+5. 等待 skill 完成后，确认归档成功：检查 `openspec/changes/archive/` 下是否有对应目录，且原活跃变更目录已移除。
 
-**注意：** `openspec-archive-change` 内部已包含用户确认环节（它用 AskUserQuestion 确认是否继续），不需要 CodeForge 重复确认。但 Step 1 的验证结果应在调用 archive 前展示给用户。
+**交互边界：** `openspec-archive-change` 如果仍提出确认或其它问题，阶段 Agent 必须把问题转换为 `NEEDS_USER` 交回 Coordinator；不得在阶段 Agent 或下层 skill 上下文中直接调用用户交互工具。Coordinator 回传答案后恢复同一 archive Agent。
 
 **降级方案：** 如果 `openspec-archive-change` skill 不可用（Skill 工具返回 "Unknown skill"），**或 `openspec archive` CLI 卡在交互式确认（Y/n）、或因 spec 未用 `## ADDED/MODIFIED Requirements` delta 头被判"无 delta"无法自动合并规格**，手动执行归档操作：
 1. 确认 `openspec/changes/<变更名>/tasks.md` 中所有任务已标记为完成
@@ -91,7 +92,7 @@
 **如果仍保留整个 change 的长期 worktree：**
 
 `subagent-implement` 创建的执行单元级临时 worktree 应已在 apply 阶段清理，不进入这里的分支处理。
-提示用户选择分支处理方式：
+通过 `NEEDS_USER` 提示用户选择分支处理方式，并给出推荐选择：
 
 1. **合并到主分支** — 在 worktree 中合并，清理 worktree
 2. **创建 PR** — 推送到远程，创建 Pull Request
@@ -99,17 +100,17 @@
 4. **丢弃** — 放弃所有改动（需输入 "discard" 确认）
 
 **如果没有长期 worktree（直接在当前分支开发）：**
-跳过分支处理，提示用户是否需要提交代码。
+跳过分支处理，通过 `NEEDS_USER` 询问用户是否需要提交代码。
 
 **总结报告：**
-向用户报告本次变更的完整信息：
+通过 `CODEFORGE_RESULT.report` 向用户报告本次变更的完整信息：
 - 完成了哪些任务
 - 涉及哪些文件的改动
 - 规格更新了什么
 - 归档位置
 
 **清理状态文件：**
-更新 `.codeforge-state.yaml`：`checkpoint: done`。使用 `git rm .codeforge-state.yaml` 将其从 git 追踪中移除，然后 commit（message: `chore: codeforge <变更名> 完成`）。确保工作区干净。
+更新 `.codeforge-state.yaml`：`checkpoint: done`。使用 `git rm .codeforge-state.yaml` 将其从 git 追踪中移除，然后 commit（message: `chore: codeforge <变更名> 完成`）。确保工作区干净，最后返回 `DONE`；即使状态文件已删除，返回结果仍必须包含上述完整摘要和归档位置。
 
 ## 出口条件
 
@@ -138,8 +139,8 @@ archive 阶段可能通过两种方式进入：
 | `archived` | 归档目录存在且分支已处理 | 展示变更摘要（同 Step 4 总结报告），然后清理状态文件完成 |
 
 **异常状态检测：**
-- 活跃变更目录已删除但 archive 目录不存在 → 归档过程中断，提示用户可尝试 `openspec list --json` 检查状态
-- `.codeforge-state.yaml` 存在但活跃变更目录不存在且未归档 → 可能是手动删除，提示用户确认状态
+- 活跃变更目录已删除但 archive 目录不存在 → 归档过程中断，返回 `BLOCKED`，并在 `recovery` 中提示运行 `openspec list --json` 检查状态
+- `.codeforge-state.yaml` 存在但活跃变更目录不存在且未归档 → 可能是手动删除，返回 `NEEDS_USER` 让用户确认实际状态
 
 ## 硬门
 
