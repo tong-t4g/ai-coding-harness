@@ -27,17 +27,6 @@
 - 读取 `openspec/changes/<变更名>/tasks.md`，确认所有任务已完成
 - 将验证结果整理为一份清单，逐项标注「通过」或「不一致」
 
-**基于代码结构的交叉验证（如果 `project_profile.knowledge_graph.codegraph_available == true`）：**
-逐项验证每个技术方案点时，用 CodeGraph 做精确的交叉引用验证，替代/补充逐文件 Read：
-- `codegraph_search` 搜索 design.md 中提到的代码符号，定位其实现位置
-- `codegraph_callers`/`codegraph_callees` 验证调用链是否符合设计方案（如设计要求 A 调用 B，验证代码中确实存在该调用关系）
-- `codegraph_explore` 验证两个关键符号之间的调用路径（含跨模块/动态分派跳转）是否符合设计预期
-- 每项标注「通过」（调用链符合设计）或「不一致」（调用链缺失或偏离设计）
-
-> CodeGraph MCP 默认只暴露 `codegraph_explore`（内联 search/callers/callees/impact 结果与调用路径）；`search`/`callers`/`callees` 需 `CODEGRAPH_MCP_TOOLS` 启用或用 CLI 等价命令，未启用时统一用 `codegraph_explore`。详见 SKILL.md「CodeGraph 工具面说明」。
-
-**知识图谱不可用时回退：** 逐文件 Read 对比设计文档和代码（现有方式）。运行时工具不可达（Unknown tool/报错）同样回退，见 SKILL「运行时可达性规则」。
-
 验证维度：
 - design.md 中定义的技术方案是否全部实现
 - specs/ 中标记的 ADDED/MODIFIED/REMOVED 是否在代码中体现
@@ -97,18 +86,11 @@
 
 完成后更新 `.codeforge-state.yaml`：`checkpoint: archived`。
 
-**归档后知识更新（如果 `project_profile.knowledge_graph.graphify_available == true`）：**
-归档完成、变更已移入 `archive/` 后，触发 Graphify 增量更新，把本次变更沉淀到文档知识图谱，供后续变更语义检索复用：
-1. `graphify.build.build_merge([归档规格的抽取片段], graph_path)` — 将归档的新规格知识**只增不减**地增量合并到图谱（也可先 `/graphify openspec --update` 重抽取变更文件再合并）
-2. `build_merge(..., prune_sources=[<被移除的 source_file>])` — 按 `source_file` 精确清理活跃变更目录移除后产生的过期节点（缩图需 `to_json(..., force=True)` 确认；或 `graphify.build.prune_repo_from_graph` 按仓库标签清理）
-
-失败不影响归档结果（归档已完成，知识更新是可选增强）。
-
-**知识图谱不可用时回退：** 跳过知识更新。
-
 ### 4. 分支收尾 + 总结
 
-**如果使用了 worktree：**
+**如果仍保留整个 change 的长期 worktree：**
+
+`subagent-implement` 创建的任务级临时 worktree 应已在 apply 阶段清理，不进入这里的分支处理。
 提示用户选择分支处理方式：
 
 1. **合并到主分支** — 在 worktree 中合并，清理 worktree
@@ -116,7 +98,7 @@
 3. **保持现状** — 保留分支和 worktree，稍后处理
 4. **丢弃** — 放弃所有改动（需输入 "discard" 确认）
 
-**如果未使用 worktree（直接在当前分支开发）：**
+**如果没有长期 worktree（直接在当前分支开发）：**
 跳过分支处理，提示用户是否需要提交代码。
 
 **总结报告：**
@@ -133,8 +115,8 @@
 
 - 实现和规格一致（验证通过）
 - 变更已归档（由 openspec-archive-change 完成）
-- 如使用了 worktree：用户已选择分支处理方式且 worktree 已处理
-- 如未使用 worktree：代码已提交或用户已确认稍后处理
+- 如仍有长期 worktree：用户已选择分支处理方式且 worktree 已处理
+- 如无长期 worktree：代码已提交或用户已确认稍后处理
 - `.codeforge-state.yaml` 已删除
 
 ## 断点恢复

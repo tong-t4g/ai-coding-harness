@@ -1,0 +1,329 @@
+#!/usr/bin/env bash
+# 为独立任务创建、集成和清理可恢复的 detached Git worktree。
+# 标准输出只返回清单路径或提交 SHA，诊断信息写入标准错误。
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+用法：
+  task-worktree prepare PLAN_FILE BASE TASK_NUMBER...
+  task-worktree integrate PLAN_FILE TASK_NUMBER
+  task-worktree record PLAN_FILE TASK_NUMBER INTEGRATION_SHA
+  task-worktree cleanup PLAN_FILE
+EOF
+  exit 2
+}
+
+fail() {
+  echo "错误：$1" >&2
+  exit "${2:-2}"
+}
+
+validate_task_number() {
+  case "$1" in
+    ''|*[!0-9]*) fail "任务编号必须是正整数：$1" ;;
+  esac
+  if [ "$1" -eq 0 ]; then
+    fail "任务编号必须大于 0"
+  fi
+}
+
+load_context() {
+  plan=$1
+  if [ ! -f "$plan" ]; then
+    fail "计划文件不存在：$plan"
+  fi
+
+  plan_dir=$(cd "$(dirname "$plan")" && pwd -P)
+  plan_abs="$plan_dir/$(basename "$plan")"
+  root=$(git -C "$plan_dir" rev-parse --show-toplevel)
+  root=$(cd "$root" && pwd -P)
+
+  case "$plan_abs" in
+    "$root"/*) ;;
+    *) fail "计划文件必须位于当前 Git 工作区内：$plan_abs" ;;
+  esac
+  case "$plan_abs$root" in
+    *$'\t'*|*$'\n'*) fail "计划路径和仓库路径不能包含制表符或换行符" ;;
+  esac
+
+  workspace=$(cd "$root" && bash "$script_dir/sdd-workspace" "$plan_abs")
+  manifest="$workspace/worktrees.tsv"
+  plan_name=$(basename "$plan_abs" .md)
+  plan_slug=$(printf '%s' "$plan_name" | sed 's/[^[:alnum:]._-]/-/g; s/--*/-/g; s/^-//; s/-$//' | cut -c1-40)
+  if [ -z "$plan_slug" ]; then
+    plan_slug=plan
+  fi
+  plan_key=$(printf '%s' "$plan_abs" | git -C "$root" hash-object --stdin | cut -c1-10)
+  run_id="${plan_slug}-${plan_key}"
+  worktree_base="$root/.codeforge/worktrees/$run_id"
+
+  mkdir -p "$root/.codeforge"
+  ignore="$root/.codeforge/.gitignore"
+  if [ ! -f "$ignore" ]; then
+    printf '*\n' > "$ignore"
+  elif ! grep -qxF '*' "$ignore"; then
+    printf '*\n' >> "$ignore"
+  fi
+}
+
+require_main_worktree() {
+  current_root=$(git rev-parse --show-toplevel)
+  current_root=$(cd "$current_root" && pwd -P)
+  if [ "$current_root" != "$root" ]; then
+    fail "该操作必须在计划所属的主工作树中执行：$root"
+  fi
+}
+
+require_clean_root() {
+  if [ -n "$(git -C "$root" status --porcelain)" ]; then
+    fail "主工作树存在未提交改动，不能操作任务 worktree"
+  fi
+}
+
+manifest_row() {
+  task=$1
+  awk -F '\t' -v task="$task" '
+    NR > 1 && $1 == task { print; found = 1 }
+    END { if (!found) exit 3 }
+  ' "$manifest"
+}
+
+prepare() {
+  if [ "$#" -lt 3 ]; then
+    usage
+  fi
+  load_context "$1"
+  shift
+  base=$1
+  shift
+  require_main_worktree
+  require_clean_root
+
+  if ! git -C "$root" rev-parse --verify --quiet "${base}^{commit}" >/dev/null; then
+    fail "BASE 不是有效提交：$base"
+  fi
+  base=$(git -C "$root" rev-parse "$base^{commit}")
+  if [ "$(git -C "$root" rev-parse HEAD)" != "$base" ]; then
+    fail "prepare 要求 BASE 等于主工作树当前 HEAD"
+  fi
+
+  plan_rel=${plan_abs#"$root"/}
+  if ! git -C "$root" cat-file -e "$base:$plan_rel" 2>/dev/null; then
+    fail "计划文件尚未包含在 BASE 中，请先提交计划和状态文件"
+  fi
+
+  if [ ! -f "$manifest" ]; then
+    printf 'task\tbase\tpath\tintegrated\tcleaned\n' > "$manifest"
+  fi
+  mkdir -p "$worktree_base"
+
+  seen=' '
+  for task in "$@"; do
+    validate_task_number "$task"
+    case "$seen" in
+      *" $task "*) fail "任务编号重复：$task" ;;
+    esac
+    seen="$seen$task "
+
+    row=$(manifest_row "$task" 2>/dev/null || true)
+    if [ -n "$row" ]; then
+      IFS=$'\t' read -r recorded_task recorded_base path integrated cleaned <<EOF
+$row
+EOF
+      if [ "$recorded_base" != "$base" ]; then
+        fail "任务 $task 已记录在不同 BASE：$recorded_base"
+      fi
+      if [ "$integrated" != '-' ]; then
+        continue
+      fi
+      if [ ! -d "$path" ] || ! git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        fail "任务 $task 的未集成 worktree 丢失：$path"
+      fi
+      continue
+    fi
+
+    path="$worktree_base/task-$task"
+    if [ -e "$path" ]; then
+      fail "任务 $task 的目标路径已存在但未登记：$path"
+    fi
+    git -C "$root" worktree add --detach "$path" "$base" >/dev/null
+    path=$(cd "$path" && pwd -P)
+    printf '%s\t%s\t%s\t-\t-\n' "$task" "$base" "$path" >> "$manifest"
+  done
+
+  printf '%s\n' "$manifest"
+}
+
+integrate() {
+  if [ "$#" -ne 2 ]; then
+    usage
+  fi
+  load_context "$1"
+  task=$2
+  validate_task_number "$task"
+  require_main_worktree
+  require_clean_root
+  if [ ! -f "$manifest" ]; then
+    fail "worktree 清单不存在：$manifest"
+  fi
+
+  row=$(manifest_row "$task" 2>/dev/null) || fail "任务 $task 不在 worktree 清单中"
+  IFS=$'\t' read -r recorded_task base path integrated cleaned <<EOF
+$row
+EOF
+  if [ "$integrated" != '-' ]; then
+    printf '%s\n' "$integrated"
+    return
+  fi
+  if [ ! -d "$path" ] || ! git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    fail "任务 $task 的 worktree 不可用：$path"
+  fi
+  if [ -n "$(git -C "$path" status --porcelain)" ]; then
+    fail "任务 $task 的 worktree 存在未提交改动"
+  fi
+
+  task_head=$(git -C "$path" rev-parse HEAD)
+  if [ "$task_head" = "$base" ]; then
+    fail "任务 $task 没有实现提交" 3
+  fi
+  if ! git -C "$root" merge-base --is-ancestor "$base" "$task_head"; then
+    fail "任务 $task 的 HEAD 不是 BASE 的后代"
+  fi
+  if ! git -C "$root" merge-base --is-ancestor "$base" HEAD; then
+    fail "主工作树 HEAD 已偏离任务 BASE"
+  fi
+
+  mapfile -t commits < <(git -C "$root" rev-list --reverse "${base}..${task_head}")
+  if ! git -C "$root" cherry-pick --no-commit "${commits[@]}"; then
+    echo "错误：任务 $task 集成冲突；保留冲突状态和任务 worktree，等待显式处理" >&2
+    exit 4
+  fi
+  printf '%s\n' "$task_head"
+}
+
+record() {
+  if [ "$#" -ne 3 ]; then
+    usage
+  fi
+  load_context "$1"
+  task=$2
+  integration=$3
+  validate_task_number "$task"
+  require_main_worktree
+  require_clean_root
+  if [ ! -f "$manifest" ]; then
+    fail "worktree 清单不存在：$manifest"
+  fi
+  if ! git -C "$root" rev-parse --verify --quiet "${integration}^{commit}" >/dev/null; then
+    fail "集成提交不是有效提交：$integration"
+  fi
+  integration=$(git -C "$root" rev-parse "$integration^{commit}")
+  if [ "$integration" != "$(git -C "$root" rev-parse HEAD)" ]; then
+    fail "只能记录主工作树当前 HEAD，实际传入：$integration"
+  fi
+
+  row=$(manifest_row "$task" 2>/dev/null) || fail "任务 $task 不在 worktree 清单中"
+  IFS=$'\t' read -r recorded_task base path integrated cleaned <<EOF
+$row
+EOF
+  if [ "$integrated" != '-' ]; then
+    if [ "$integrated" != "$integration" ]; then
+      fail "任务 $task 已记录为另一个集成提交：$integrated"
+    fi
+    printf '%s\n' "$integrated"
+    return
+  fi
+
+  task_head=$(git -C "$path" rev-parse HEAD)
+  patch="$workspace/task-${task}-integration-check.patch"
+  git -C "$root" diff --binary "$base" "$task_head" > "$patch"
+  if [ ! -s "$patch" ]; then
+    rm -f "$patch"
+    fail "任务 $task 没有可记录的代码差异"
+  fi
+  if ! git -C "$root" apply --reverse --check "$patch"; then
+    rm -f "$patch"
+    fail "集成提交未完整包含任务 $task 的代码差异"
+  fi
+  rm -f "$patch"
+
+  tmp="${manifest}.tmp.$$"
+  if ! awk -F '\t' -v OFS='\t' -v task="$task" -v integration="$integration" '
+    NR > 1 && $1 == task { $4 = integration; found = 1 }
+    { print }
+    END { if (!found) exit 3 }
+  ' "$manifest" > "$tmp"; then
+    rm -f "$tmp"
+    fail "无法更新任务 $task 的集成状态"
+  fi
+  mv "$tmp" "$manifest"
+  printf '%s\n' "$integration"
+}
+
+cleanup_worktrees() {
+  if [ "$#" -ne 1 ]; then
+    usage
+  fi
+  load_context "$1"
+  require_main_worktree
+  require_clean_root
+  if [ ! -f "$manifest" ]; then
+    fail "worktree 清单不存在：$manifest"
+  fi
+
+  while IFS=$'\t' read -r task base path integrated cleaned; do
+    if [ "$task" = 'task' ]; then
+      continue
+    fi
+    if [ "$cleaned" = 'yes' ]; then
+      if [ -d "$path" ]; then
+        fail "任务 $task 已记录清理完成，但 worktree 仍然存在：$path"
+      fi
+      continue
+    fi
+    if [ "$integrated" = '-' ]; then
+      fail "任务 $task 尚未记录集成提交，拒绝清理"
+    fi
+    if [ ! -d "$path" ] || ! git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      fail "任务 $task 的 worktree 丢失且未记录清理完成：$path"
+    fi
+    if [ -n "$(git -C "$path" status --porcelain)" ]; then
+      fail "任务 $task 的 worktree 存在未提交改动，拒绝清理"
+    fi
+  done < "$manifest"
+
+  while IFS=$'\t' read -r task base path integrated cleaned; do
+    if [ "$task" = 'task' ] || [ "$cleaned" = 'yes' ]; then
+      continue
+    fi
+    git -C "$root" worktree remove "$path"
+    tmp="${manifest}.tmp.$$"
+    if ! awk -F '\t' -v OFS='\t' -v task="$task" '
+      NR > 1 && $1 == task { $5 = "yes"; found = 1 }
+      { print }
+      END { if (!found) exit 3 }
+    ' "$manifest" > "$tmp"; then
+      rm -f "$tmp"
+      fail "无法记录任务 $task 的 worktree 清理状态"
+    fi
+    mv "$tmp" "$manifest"
+  done < "$manifest"
+  rmdir "$worktree_base" 2>/dev/null || true
+  printf '%s\n' "$manifest"
+}
+
+if [ "$#" -lt 1 ]; then
+  usage
+fi
+script_dir=$(cd "$(dirname "$0")" && pwd -P)
+command=$1
+shift
+
+case "$command" in
+  prepare) prepare "$@" ;;
+  integrate) integrate "$@" ;;
+  record) record "$@" ;;
+  cleanup) cleanup_worktrees "$@" ;;
+  *) usage ;;
+esac
