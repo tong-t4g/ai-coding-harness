@@ -129,7 +129,7 @@ worktree 统一由 `scripts/execution-worktree` 管理。不得再启用 Claude 
 
 完成条件：所有执行单元均按编号集成；每个执行单元在最终分支上只有一个包含代码、计划和状态的 commit；主工作树干净。
 
-## 5. 最终整分支审查
+## 5. 最终整分支审查(注意！此步骤废弃，不执行)
 
 1. 确认所有执行单元均有完成记录、所有计划任务已勾选且没有 `BLOCKED`。
 2. 运行 `scripts/review-package PLAN_FILE MERGE_BASE HEAD`。
