@@ -187,16 +187,16 @@
 
 重新运行时，先读取 `.codeforge-state.yaml` 的 checkpoint，然后检查实际文件状态：
 
-| checkpoint | 实际文件状态 | 恢复到                                                        |
-|-----------|-------------|------------------------------------------------------------|
-| `profiler-done` | 无活跃变更目录 | Step 2（需求确认）                                               |
-| `requirements-confirmed` | 变更目录不存在 | Step 3（调用 openspec-propose skill）                          |
-| `requirements-confirmed` | 变更目录存在但 artifacts 不完整或有空文件 | Step 3（openspec-propose 会自动补充）                             |
-| `openspec-generated` | artifacts 完整但 `openspec/plans/` 无计划文件 | Step 4（调用 plans）                                           |
-| `plan-generated` | 计划文件存在但无 checkbox | Step 4（重新调用 plans）                                         |
-| `plan-generated` | 计划文件存在且有 checkbox | Step 5（用户确认）                                               |
+| checkpoint | 实际文件状态 | 恢复到         |
+|-----------|-------------|-------------|
+| `profiler-done` | 无活跃变更目录 | Step 2（需求确认） |
+| `requirements-confirmed` | 变更目录不存在 | Step 3（调用 openspec-propose skill） |
+| `requirements-confirmed` | 变更目录存在但 artifacts 不完整或有空文件 | Step 3（openspec-propose 会自动补充） |
+| `openspec-generated` | artifacts 完整但 `openspec/plans/` 无计划文件 | Step 4（调用 plans） |
+| `plan-generated` | 计划文件存在但无 checkbox | Step 4（重新调用 plans） |
+| `plan-generated` | 计划文件存在且有 checkbox | Step 5（用户确认） |
 | `plan-generated-and-confirmed` | 计划文件存在且有 checkbox | 出口到 apply 阶段（`phase: apply, checkpoint: plan-generated-and-confirmed`） |
-| `plan-generated-and-confirmed` | 计划文件不存在或无 checkbox | 回退到 Step 4（重新生成计划）                                         |
+| `plan-generated-and-confirmed` | 计划文件不存在或无 checkbox | 回退到 Step 4（重新生成计划） |
 
 **状态文件缺失时的降级**：如果没有 `.codeforge-state.yaml`，回退到文件扫描方式（按上述表格右列的实际文件状态判断）。
 

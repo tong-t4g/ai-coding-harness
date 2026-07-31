@@ -24,7 +24,7 @@ CodeForge 是一个薄 Coordinator。它只负责公共前置检查、状态验�
 Coordinator 只做以下事情：
 
 1. 只读检查 OpenSpec、`.codeforge-state.yaml` 和实际文件，只推导应启动的目标阶段。
-2. 按当前平台启动对应阶段 Agent；三个阶段必须顺序执行，同一阶段不得并发启动多个 Agent。
+2. 按当前平台启动对应阶段 Agent；三个阶段必须顺序执行，同一时刻不得并发启动多个阶段 Agent，但 apply 阶段内部的执行单元并行不受此限制。
 3. 转发阶段 Agent 提出的单个用户问题，并把答案交回同一 Agent。
 4. 在阶段 Agent 返回 `DONE` 后独立核对阶段出口；通过则继续下一阶段，不通过则恢复当前阶段 Agent。
 5. 将阶段 Agent 返回的用户可见摘要展示给用户，但不把阶段内部推理或大段工作记录搬回主会话。
@@ -92,7 +92,7 @@ Coordinator 对结果的处理：
 - `NEEDS_USER`：向用户原样提出 `question` 和 `recommendation`；得到答案后恢复同一阶段 Agent。
 - `BLOCKED`：向用户报告 `blocker`、`recovery` 和证据，停止自动推进。
 - `REROUTE`：独立核对状态修正与实际文件；一致则启动 `next_phase` Agent，不一致则把缺口交回原阶段 Agent。
-- `DONE`：不信任文字结论，按对应阶段 Markdown 的出口条件检查实际文件。通过后重新读取状态并路由；不通过则把缺口交回同一阶段 Agent。
+- `DONE`：不信任文字结论，按对应阶段 Markdown 的出口条件检查实际文件。若当前阶段不是 archive，则通过后重新读取状态并路由；若当前阶段是 archive 且出口通过，则直接结束本次 CodeForge 调用，不再重新路由。不通过则把缺口交回同一阶段 Agent。
 
 任何状态的 `report` 非空时，Coordinator 都先向用户展示；`NEEDS_USER` 随后再提出单个问题。下层 skill 如果尝试提问，阶段 Agent 必须把该问题转换为 `NEEDS_USER`，不得让下层 skill 绕过 Coordinator。
 
@@ -143,4 +143,4 @@ Coordinator 在 `DONE` 后读取对应阶段 Markdown 的“出口条件”并�
 | apply | `phase: archive`、`checkpoint: apply-done` |
 | archive | 变更已归档且 `.codeforge-state.yaml` 已删除 |
 
-出口不满足时不得启动下一阶段。出口满足后立即重新路由；因此一次 CodeForge 调用会持续推进，直到流程完成、需要用户决定或显式阻塞。
+出口不满足时不得启动下一阶段。出口满足后立即重新路由；因此一次 CodeForge 调用会持续推进，直到流程完成、需要用户决定或显式阻塞。archive 完成后视为流程结束，直接终止，不再开启新一轮路由。

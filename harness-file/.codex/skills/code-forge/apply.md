@@ -10,6 +10,14 @@
 2. 如果计划不存在或不完整：自动路由时，按实际 artifacts 把 `.codeforge-state.yaml` 修正为 `phase: propose` 和最近一个可证明的 checkpoint，然后返回 `REROUTE`；用户明确指定 apply 时返回 `NEEDS_USER`，说明缺少前置计划并推荐先回到 propose。
 3. 读取 `.codeforge-state.yaml` 的 `project_profile`，获取 `compile_command`、`compile_scope` 和 `test_command`；旧状态没有 `compile_scope` 时按 `full` 处理。
 
+## 无状态恢复
+
+如果 `.codeforge-state.yaml` 不存在，或者存在但 `project_profile` 为空，先按 `propose.md` 中的项目分析规则重建 `project_profile` 并写回状态文件。
+
+如果同时缺少状态文件，且无法从实际文件证明更后面的 checkpoint，就先以 `phase: apply, checkpoint: plan-generated-and-confirmed` 作为恢复基线，再继续后续的 checkpoint 验证。
+
+如果无法重建出足够支撑本阶段编译/测试决策的 `project_profile`，返回 `BLOCKED`。
+
 ## 环境检查
 
 在开始实现前，验证编译环境是否可用：
