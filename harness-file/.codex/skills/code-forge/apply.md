@@ -96,7 +96,7 @@
 
 完整模式由 `subagent-implement` 执行以下流程；轻量模式由当前会话直接执行：
 
-1. **取得改动**：完整模式从已审查的执行单元 worktree 运行 `execution-worktree integrate PLAN_FILE unit-N`；轻量模式使用当前工作树中的实现改动
+1. **取得改动**：完整模式从已审查的执行单元 worktree 按 `subagent-implement` 的 `<skill_dir>` 规则运行 `<skill_dir>/scripts/execution-worktree integrate PLAN_FILE unit-N`；轻量模式使用当前工作树中的实现改动
 2. **编译检查**：运行 `compile_command`，编译必须通过（如果 compile_command 为 null 则跳过）
 3. **更新 checkbox**：完整模式将该执行单元包含的**所有 Task 下的全部** `- [ ]` 改为 `- [x]`；轻量模式更新当前 Task。包括 Verify、Commit 等非实现步骤，不能遗漏
 4. **更新状态文件**：完整模式更新为 `checkpoint: unit-N-complete`；轻量模式更新为 `checkpoint: task-N-complete`
@@ -104,7 +104,7 @@
    - commit message 格式：`<类型>(<范围>): <执行单元或 task 描述>`
    - 完整模式一个执行单元对应一个最终 commit；轻量模式一个 Task 对应一个 commit
    - **全程不做 push 操作**
-6. **记录集成**：完整模式运行 `execution-worktree record PLAN_FILE unit-N HEAD`；轻量模式跳过
+6. **记录集成**：完整模式按 `subagent-implement` 的 `<skill_dir>` 规则运行 `<skill_dir>/scripts/execution-worktree record PLAN_FILE unit-N HEAD`；轻量模式跳过
 
 **原子性保证**：先取得代码改动，再更新 checkbox 和状态文件，最后一起 commit。完整模式如果在 `integrate` 后、commit 前中断，主工作树会保留暂存改动；恢复时核对差异后继续编译和提交，不得重复集成。如果 commit 后、`record` 前中断，直接补记集成提交。如果 commit 和记录均完成，checkpoint、checkbox 和 worktree 清单共同证明该执行单元已完成。
 
