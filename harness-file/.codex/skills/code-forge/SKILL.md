@@ -109,7 +109,9 @@ phase: propose | apply | archive
 checkpoint: profiler-done | requirements-confirmed | openspec-generated | plan-generated | plan-generated-and-confirmed | unit-N-complete | task-N-complete | verified | reviewed | apply-done | consistency-verified | archived | done
 project_profile:
   languages: [java]
+  language_versions: {java: "21"}
   frameworks: [spring-boot]
+  framework_versions: {spring-boot: "3.2.5"}
   build_tool: maven
   compile_command: mvn compile
   compile_scope: full | scoped

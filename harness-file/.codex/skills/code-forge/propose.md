@@ -17,7 +17,9 @@
 | 检测项 | 检测方式 | 默认值 |
 |---|---|---|
 | **languages** | 统计 `src/`、`lib/`、`app/` 等源码目录下的文件扩展名，取占比最高的 1-2 种 | `[]` |
+| **language_versions** | 按语言名记录项目声明或锁定的版本；优先读取项目文件（Java：`pom.xml`/`build.gradle*` 的 release/source/target，Go：`go.mod` 的 `go`，Rust：`Cargo.toml` 的 `rust-version`，Python：`pyproject.toml` 的 `requires-python`，Node.js：`.nvmrc`/`package.json.engines.node`），无法确定时为 `unknown`，禁止用本机版本猜测 | `{}` |
 | **frameworks** | 读取 `package.json` 的 dependencies/devDependencies、`pom.xml` 的 `<dependencies>`、`go.mod` 的 require 等提取关键框架名 | `[]` |
+| **framework_versions** | 按框架名记录依赖声明或锁定文件中的版本；优先使用 lockfile 或构建文件中的有效版本，Maven 属性/BOM 等无法解析时为 `unknown`，禁止用本机缓存版本猜测 | `{}` |
 | **build_tool** | `pom.xml` → maven；`build.gradle`/`build.gradle.kts` → gradle；`package.json` → 根据 lock 文件选择 npm/yarn/pnpm；`go.mod` → go；`Cargo.toml` → cargo；`pyproject.toml` → python | `unknown` |
 | **compile_command** | 根据下方构建命令映射推导 | `null` |
 | **compile_scope** | 默认全量编译；只有下方 scoped 降级验证通过后才改为 `scoped` | `full` |
@@ -50,7 +52,7 @@
 5. test_command 不强制执行，但要确认测试框架已安装，例如检查 `pytest` 是否可用或检查 `package.json` 的 devDependencies。
 
 **空白项目（greenfield）处理：**
-如果是空项目（无源码、无配置），跳过分析，project_profile 保持默认空值。在需求确认步骤中一并确定技术栈，分析完成后补充 project_profile。
+如果是空项目（无源码、无配置），跳过分析，project_profile 保持默认空值。在需求确认步骤中一并确定技术栈（语言、框架、构建工具；若能确认版本也一并确认），分析完成后补充 project_profile。
 
 ### 2. 需求确认（这一环节是我觉得是最该重视的环节）
 
@@ -84,7 +86,7 @@
 1. 宣布："调用 openspec-propose 生成规格文档"
 2. 使用 Skill 工具调用 `openspec-propose`，args 格式：
    ```
-   Change name: <变更名>. Description: [项目: {project_profile.languages} + {project_profile.frameworks}, 构建: {project_profile.build_tool}] <需求描述>
+   Change name: <变更名>. Description: [项目: {project_profile.languages} + {project_profile.frameworks}, 版本: {project_profile.language_versions} + {project_profile.framework_versions}, 构建: {project_profile.build_tool}] <需求描述>
    ```
    将 project_profile 信息作为上下文前缀附加到描述中，让 openspec-propose 能生成贴合项目技术栈的规格文档。
 3. `openspec-propose` 会自动执行：
@@ -125,6 +127,8 @@
    ```
    变更名: <name>
    项目技术栈: {project_profile.languages} + {project_profile.frameworks}
+   语言版本: {project_profile.language_versions}
+   框架版本: {project_profile.framework_versions}
    构建工具: {project_profile.build_tool}
    测试框架: {project_profile.test_command}
    项目结构: {project_profile.structure}
@@ -150,7 +154,7 @@
    openspec artifacts:
    <将上述文件内容拼接>
    ```
-   将完整 project_profile 信息、编译约束、API 验证结果和知识图谱上下文传入，让 plans skill 从一开始就生成正确的任务分解，避免事后合并。
+   将完整 project_profile 信息（包括语言/框架版本；`unknown` 必须保留）、编译约束、API 验证结果和知识图谱上下文传入，让 plans skill 从一开始就生成正确的任务分解，避免事后合并。
 5. plans 会读取上下文，生成实现计划（File Structure 表 + 带 checkbox 的 TDD 微步骤），保存到 `openspec/plans/YYYY-MM-DD-<变更名>.md`
 6. 确认 `openspec/plans/` 下有计划文件且包含至少 1 个 checkbox。如果没有 checkbox，说明 plans 未能基于 tasks.md 展开步骤，需要重新执行并更明确地指定 "按 tasks.md 中的每个 Task 展开为 TDD 微步骤"。
 7. **绑定变更名**：在计划文件开头添加一行注释 `<!-- codeforge change: <变更名> -->`，用于 SKILL.md 状态检测时确认计划文件与活跃变更的对应关系。
@@ -169,7 +173,7 @@
 非自主模式通过 `CODEFORGE_RESULT.report` 展示产出摘要，并返回 `NEEDS_USER` 请用户确认「规格 OK，可以开始实现」：
 
 - 变更名和位置
-- 项目 profile 信息（语言、框架、构建工具）
+- 项目 profile 信息（语言、框架、版本、构建工具）
 - 生成的 artifacts 列表
 - 实现计划中的 Task 数量和关键步骤
 - 预计涉及修改的文件列表
