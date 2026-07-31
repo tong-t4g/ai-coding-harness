@@ -201,7 +201,7 @@
 | `plan-generated-and-confirmed` | 计划文件存在且有 checkbox | 出口到 apply 阶段（`phase: apply, checkpoint: plan-generated-and-confirmed`） |
 | `plan-generated-and-confirmed` | 计划文件不存在或无 checkbox | 回退到 Step 4（重新生成计划） |
 
-**状态文件缺失时的降级**：如果没有 `.codeforge-state.yaml`，回退到文件扫描方式（按上述表格右列的实际文件状态判断）。
+**状态文件缺失时的降级**：如果没有 `.codeforge-state.yaml`，按实际文件扫描恢复：完整 artifacts + 有效计划但没有可验证的用户确认凭据时恢复到 Step 5；缺少 artifacts 或计划时恢复到对应生成步骤；只有确认凭据存在时才允许出口到 apply。不得仅凭计划存在推断用户已确认。
 
 ## 硬门
 

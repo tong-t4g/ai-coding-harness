@@ -14,7 +14,7 @@
 
 如果 `.codeforge-state.yaml` 不存在，或者存在但 `project_profile` 为空，先按 `propose.md` 中的项目分析规则重建 `project_profile` 并写回状态文件。
 
-如果同时缺少状态文件，且无法从实际文件证明更后面的 checkpoint，就先以 `phase: apply, checkpoint: plan-generated-and-confirmed` 作为恢复基线，再继续后续的 checkpoint 验证。
+如果同时缺少状态文件，且无法从实际文件证明计划已获用户确认，不得把 `plan-generated-and-confirmed` 作为恢复基线：自动路由时将状态校准为 `phase: propose, checkpoint: plan-generated` 并返回 `REROUTE`，由 propose 阶段恢复到用户确认步骤；用户明确指定 apply 时返回 `NEEDS_USER`，说明缺少计划确认依据。只有状态文件或明确的确认凭据能够证明计划已确认时，才可继续 apply。
 
 如果无法重建出足够支撑本阶段编译/测试决策的 `project_profile`，返回 `BLOCKED`。
 

@@ -106,7 +106,7 @@ Coordinator 对结果的处理：
 version: 1
 active_change: add-user-auth
 phase: propose | apply | archive
-checkpoint: profiler-done | requirements-confirmed | openspec-generated | plan-generated | plan-generated-and-confirmed | unit-N-complete | task-N-complete | verified | reviewed | apply-done | consistency-verified | archived | done
+checkpoint: profiler-done | requirements-confirmed | openspec-generated | plan-generated | plan-generated-and-confirmed | unit-N-complete | task-N-complete | verified | reviewed | apply-done | consistency-verified | archived
 project_profile:
   languages: [java]
   language_versions: {java: "21"}
@@ -122,6 +122,8 @@ project_profile:
 
 实际文件是 ground truth，状态文件只是缓存。阶段入口、断点恢复和阶段出口都必须核对实际文件。Coordinator 只选择目标阶段；阶段 Agent 负责推导并持久化最近一个可证明的 phase/checkpoint。
 
+**恢复优先级：** 先确定唯一的 `active_change`，再按实际 artifacts、计划 checkbox、执行单元账本/集成提交、测试与审查结果、归档目录推导最高可证明状态，最后才参考状态文件中的 checkpoint。状态文件领先于实际证据时必须回退，落后时由阶段 Agent 校准；无法唯一确定变更或恢复点时返回 `NEEDS_USER` 或 `BLOCKED`。任务级和执行单元级进度以计划及账本为准，`task-N-complete`、`unit-N-complete` 只是可重建的路由缓存，不是独立完成证明。
+
 ## 状态检测与路由
 
 1. 读取 `.codeforge-state.yaml`。不存在时扫描实际文件；没有可恢复变更则路由到 propose。
@@ -130,7 +132,7 @@ project_profile:
    - `propose`：没有与 `active_change` 绑定且含 checkbox 的计划时进入 propose；已有有效计划时进入 apply。
    - `apply`：缺少有效计划时进入 propose；计划存在且仍需实现、验证或审查时进入 apply。
    - `archive`：计划未全部完成时进入 apply；apply 出口满足后进入 archive。归档内部 checkpoint 和 `.close-verification-done` 只按 `archive.md` 判断。
-4. 无状态文件但存在一个活跃变更时：无有效计划路由 propose；计划有未完成 checkbox 路由 apply；计划全部完成仍先路由 apply 做验证和审查。
+4. 无状态文件但存在一个活跃变更时：无完整 artifacts 或无有效计划路由 propose；artifacts 和计划完整但无法证明用户已确认计划时路由 propose（恢复到确认步骤）；只有存在确认凭据时，计划有未完成 checkbox 才路由 apply，计划全部完成仍先路由 apply 做验证和审查。
 5. 将目标阶段放入 `CODEFORGE_CONTEXT`，启动对应阶段 Agent；该 Agent 验证并持久化状态修正后再执行阶段步骤。
 
 用户明确指定阶段时，跳过自动阶段选择并路由到指定阶段 Agent，但仍须检查该阶段的前置条件。满足时由阶段 Agent 把状态校准到指定阶段；不满足时返回 `NEEDS_USER` 或 `BLOCKED`，不得伪造状态或自动越过用户指定的阶段。

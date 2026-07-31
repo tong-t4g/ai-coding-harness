@@ -11,7 +11,7 @@
 - `openspec/plans/` 下的计划文件所有步骤已勾选
 - 测试全部通过（或 test_command 为 null）
 - 代码审查无 Critical 问题
-- `.codeforge-state.yaml` 的 checkpoint 为 `apply-done`、`consistency-verified`、`archived` 或 `done` 之一
+- `.codeforge-state.yaml` 的 checkpoint 为 `apply-done`、`consistency-verified` 或 `archived` 之一
 
 如果前置条件不满足：自动路由时，按计划、测试和审查的实际证据把 `.codeforge-state.yaml` 修正为 `phase: apply` 和最近一个可证明的 checkpoint，然后返回 `REROUTE`；用户明确指定 archive 时返回 `NEEDS_USER`，说明未满足的前置条件并推荐先回到 apply。
 
@@ -110,7 +110,7 @@
 - 归档位置
 
 **清理状态文件：**
-更新 `.codeforge-state.yaml`：`checkpoint: done`。使用 `git rm .codeforge-state.yaml` 将其从 git 追踪中移除，然后 commit（message: `chore: codeforge <变更名> 完成`）。确保工作区干净，最后返回 `DONE`；即使状态文件已删除，返回结果仍必须包含上述完整摘要和归档位置。
+归档摘要和分支收尾完成后，使用 `git rm .codeforge-state.yaml` 将状态文件从 git 追踪中移除，然后 commit（message: `chore: codeforge <变更名> 完成`）。确保工作区干净，最后返回 `DONE`；返回结果仍必须包含上述完整摘要和归档位置。无需写入不可观察的 `checkpoint: done`。
 
 ## 出口条件
 
