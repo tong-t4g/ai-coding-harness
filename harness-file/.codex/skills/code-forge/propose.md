@@ -147,14 +147,10 @@
    - 每个 Task 的关联文件必须覆盖全部新建、修改和测试文件；同一路径可如实出现在多个 Task 中
    框架 API 注意事项:
    <Step 3 中验证的实际 API 签名列表>
-   知识图谱上下文（如果对应工具可用，否则省略对应行）:
-   - 项目模块结构: <从 codegraph_explore 获取的模块依赖关系>
-   - API 验证结果: <从 codegraph_search/callers 获取的签名确认>
-   - 历史类似变更: <从 graphify query 获取的相关归档规格>
    openspec artifacts:
    <将上述文件内容拼接>
    ```
-   将完整 project_profile 信息（包括语言/框架版本；`unknown` 必须保留）、编译约束、API 验证结果和知识图谱上下文传入，让 plans skill 从一开始就生成正确的任务分解，避免事后合并。
+   将完整 project_profile 信息（包括语言/框架版本；`unknown` 必须保留）、编译约束、API 验证结果传入，让 plans skill 从一开始就生成正确的任务分解，避免事后合并。
 5. plans 会读取上下文，生成实现计划（File Structure 表 + 带 checkbox 的 TDD 微步骤），保存到 `openspec/plans/YYYY-MM-DD-<变更名>.md`
 6. 确认 `openspec/plans/` 下有计划文件且包含至少 1 个 checkbox。如果没有 checkbox，说明 plans 未能基于 tasks.md 展开步骤，需要重新执行并更明确地指定 "按 tasks.md 中的每个 Task 展开为 TDD 微步骤"。
 7. **绑定变更名**：在计划文件开头添加一行注释 `<!-- codeforge change: <变更名> -->`，用于 SKILL.md 状态检测时确认计划文件与活跃变更的对应关系。

@@ -83,7 +83,7 @@
 3. 运行 `mv openspec/changes/<变更名> openspec/changes/archive/$(date +%Y-%m-%d)-<变更名>` 执行归档
 4. 确认归档成功：活跃变更目录已移除，archive 目录已创建
 
-> **注**：openspec 1.3.1 的 `archive` 是交互式的，并要求 spec 用 `## ADDED/MODIFIED/REMOVED Requirements` delta 头（而非 `### Requirement:`）；不符会提示"无 delta"（非阻塞警告）。若规格未自动合并到 `openspec/specs/`，归档仍可经手动 `mv` 完成（知识图谱仅依赖归档目录的文件，不依赖 specs 合并）。
+> **注**：openspec 1.3.1 的 `archive` 是交互式的，并要求 spec 用 `## ADDED/MODIFIED/REMOVED Requirements` delta 头（而非 `### Requirement:`）；不符会提示"无 delta"（非阻塞警告）。若规格未自动合并到 `openspec/specs/`，归档仍可经手动 `mv` 完成。
 
 完成后更新 `.codeforge-state.yaml`：`checkpoint: archived`。
 
