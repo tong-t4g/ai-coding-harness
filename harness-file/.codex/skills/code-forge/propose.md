@@ -178,6 +178,9 @@
 - 实现计划中的 Task 数量和关键步骤
 - 预计涉及修改的文件列表
 
+**修改回流规则：**
+如果用户在本步骤提出任何需求修改，视为尚未达成共同理解，必须返回 Step 2 重新确认需求；确认后重新执行 Step 3 和 Step 4，重新生成 `proposal.md`、`design.md`、`specs/`、`tasks.md` 以及实现计划，旧 artifacts 和旧计划不得直接沿用进入 apply。
+
 ## 出口条件
 
 - `openspec/changes/<变更名>/` 下有完整的 artifacts（由 openspec-propose 生成）
