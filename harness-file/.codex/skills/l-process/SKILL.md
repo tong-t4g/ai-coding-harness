@@ -1,15 +1,15 @@
 ---
 name: l-process
-description: 基于用户的需求描述实现并交付开发工作（轻量流程）
+description: "基于规格或一组任务单实现一项工作。"
 disable-model-invocation: true
 ---
 
-基于用户的需求描述，实现相应的开发工作。
+实现用户在规格或任务单中描述的工作。
 
-尽可能在预先认可的 seams 上使用 `/tdd`。
+在预先约定的测试接缝上，尽可能使用 `/tdd`。
 
-定期运行类型检查 (Typechecking)，频繁运行单文件测试 (Single test files)，并在开发结束前完整执行一次全量测试套件 (Full test suite)。
+定期运行类型检查和单个测试文件；最后运行一次完整测试套件。
 
-开发完成后，调用代码评审指令 (/code-review) 对产出工作进行代码审查。
+完成后使用 `/code-review` 审查工作。
 
-最后，将你的工作成果提交 (Commit) 到当前分支。
+将工作提交到当前分支。

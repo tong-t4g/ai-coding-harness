@@ -1,5 +1,5 @@
 interface:
-  display_name: "Probe with Docs"
-  short_description: "Probe a design and write its docs"
+  display_name: "带文档的深度追问"
+  short_description: "追问设计并同步编写文档"
 policy:
   allow_implicit_invocation: false
